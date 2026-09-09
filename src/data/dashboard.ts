@@ -84,7 +84,7 @@ export const navigation: NavigationSection[] = [
       { label: 'Robots.txt', icon: FileText },
       { label: 'Indexing', icon: PanelsTopLeft, route: 'indexing' },
       { label: 'Schema', icon: FileCode2 },
-      { label: '404 Monitor', icon: Unlink },
+      { label: '404 Monitor', icon: Unlink, route: '404-monitor' },
     ],
   },
   {

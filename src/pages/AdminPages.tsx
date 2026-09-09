@@ -24,6 +24,7 @@ import {
   type SitemapStatus,
 } from '../api/client'
 import { Card } from '../components/ui'
+import { paginationItems } from '../lib/pagination'
 
 const emptyContent: Omit<ContentRecord, 'id'> = {
   title: '',
@@ -40,19 +41,6 @@ const emptyContent: Omit<ContentRecord, 'id'> = {
 const inputClass = 'mt-1.5 w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-brand-500 focus:ring-3 focus:ring-brand-100'
 const primaryButton = 'inline-flex items-center justify-center gap-2 rounded-lg bg-brand-700 px-4 py-2.5 text-xs font-semibold text-white transition hover:bg-brand-800 disabled:cursor-not-allowed disabled:opacity-60'
 const secondaryButton = 'inline-flex items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-600 transition hover:bg-slate-50'
-
-function paginationItems(current: number, total: number): Array<number | string> {
-  if (total <= 7) return Array.from({ length: total }, (_, index) => index + 1)
-  const pages = [1, current - 1, current, current + 1, total]
-    .filter((value, index, values) => value > 0 && value <= total && values.indexOf(value) === index)
-    .sort((left, right) => left - right)
-  const items: Array<number | string> = []
-  pages.forEach((value, index) => {
-    if (index > 0 && value - pages[index - 1] > 1) items.push(`ellipsis-${value}`)
-    items.push(value)
-  })
-  return items
-}
 
 function Page({ title, description, action, children }: { title: string; description: string; action?: ReactNode; children: ReactNode }) {
   return (

@@ -77,6 +77,17 @@ export interface IndexingStatus {
   available?: boolean
 }
 
+export interface NotFoundRecord {
+  id: string
+  path: string
+  hits: number
+  referrer?: string | null
+  userAgent?: string | null
+  firstSeenAt: string
+  lastSeenAt: string
+  resolvedAt?: string | null
+}
+
 type RequestOptions = Omit<RequestInit, 'body'> & { body?: unknown }
 
 export class ApiError extends Error {
@@ -315,6 +326,51 @@ class ApiClient {
 
   async deleteRedirect(id: string) {
     const { message } = await this.request<null>(`/redirects/${encodeURIComponent(id)}`, { method: 'DELETE' })
+    return message
+  }
+
+  async getNotFoundEvents({
+    page = 1,
+    pageSize = 20,
+    query = '',
+    status = 'open',
+  }: {
+    page?: number
+    pageSize?: number
+    query?: string
+    status?: 'open' | 'resolved' | 'all'
+  } = {}) {
+    const params = new URLSearchParams({
+      page: String(page),
+      pageSize: String(pageSize),
+      status,
+    })
+    if (query.trim()) params.set('q', query.trim())
+    const { data, meta } = await this.request<NotFoundRecord[]>(`/not-found-events?${params}`)
+    return {
+      records: data,
+      pagination: {
+        page: Number(meta?.page) || page,
+        pageSize: Number(meta?.pageSize) || pageSize,
+        total: Number(meta?.total) || 0,
+        pages: Math.max(1, Number(meta?.pages) || 1),
+      },
+    }
+  }
+
+  async setNotFoundResolved(id: string, resolved: boolean) {
+    const { data, message } = await this.request<NotFoundRecord>(
+      `/not-found-events/${encodeURIComponent(id)}`,
+      { method: 'PATCH', body: { resolved } },
+    )
+    return { record: data, message }
+  }
+
+  async deleteNotFoundEvent(id: string) {
+    const { message } = await this.request<null>(
+      `/not-found-events/${encodeURIComponent(id)}`,
+      { method: 'DELETE' },
+    )
     return message
   }
 

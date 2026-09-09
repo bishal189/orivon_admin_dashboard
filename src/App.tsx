@@ -6,6 +6,7 @@ import { AppShell } from './components/layout/AppShell'
 import { ContentPage, IndexingPage, RedirectsPage, SitemapPage } from './pages/AdminPages'
 import { DashboardPage } from './pages/DashboardPage'
 import { LoginPage } from './pages/LoginPage'
+import { NotFoundMonitorPage } from './pages/NotFoundMonitorPage'
 
 const routePaths: Record<string, string> = {
   dashboard: '/',
@@ -14,6 +15,7 @@ const routePaths: Record<string, string> = {
   redirects: '/seo/redirects',
   sitemap: '/seo/sitemap',
   indexing: '/seo/indexing',
+  '404-monitor': '/seo/404-monitor',
 }
 
 function routeFromPath() {
@@ -88,6 +90,7 @@ function App() {
       case 'redirects': return <RedirectsPage />
       case 'sitemap': return <SitemapPage />
       case 'indexing': return <IndexingPage />
+      case '404-monitor': return <NotFoundMonitorPage />
       default: return <DashboardPage />
     }
   })()
