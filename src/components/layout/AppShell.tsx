@@ -11,11 +11,11 @@ import {
 import { navigation } from '../../data/dashboard'
 import type { AuthUser } from '../../api/client'
 
-export function BrandLogo({ compact = false }: { compact?: boolean; dark?: boolean }) {
+export function BrandLogo({ compact = false, small = false }: { compact?: boolean; dark?: boolean; small?: boolean }) {
   return (
     <img
       alt="Orivon Health Consultancy"
-      className={`h-16 w-44 object-contain ${compact ? 'lg:w-16' : ''}`}
+      className={`${small ? 'h-14 w-36' : 'h-16 w-44'} object-contain ${compact ? 'lg:w-16' : ''}`}
       src="/logo.png"
     />
   )

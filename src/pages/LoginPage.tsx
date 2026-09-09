@@ -46,7 +46,7 @@ export function LoginPage({ onAuthenticated }: LoginPageProps) {
       <section className="relative w-full max-w-md rounded-2xl border border-white/80 bg-white/95 p-7 shadow-[0_24px_70px_rgba(15,54,44,0.13)] ring-1 ring-slate-900/5 backdrop-blur sm:p-9">
         <div className="mb-7 text-center">
           <div className="mb-2 inline-flex">
-            <BrandLogo dark />
+            <BrandLogo dark small />
           </div>
           <h1 className="text-2xl font-bold tracking-[-0.025em] text-[#0b1f3a]">
             Administrator <span className="text-[#00a8ab]">sign in</span>
