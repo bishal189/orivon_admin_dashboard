@@ -88,6 +88,7 @@ export const navigation: NavigationSection[] = [
       { label: 'Redirects', icon: Route, route: 'redirects' },
       { label: 'XML Sitemap', icon: Network, route: 'sitemap' },
       { label: 'Robots.txt', icon: FileText, route: 'robots' },
+      { label: 'URL & Indexing', icon: ScanSearch, route: 'url-policy' },
       { label: 'Indexing', icon: PanelsTopLeft, route: 'indexing' },
       { label: 'Schema', icon: FileCode2 },
       { label: '404 Monitor', icon: Unlink, route: '404-monitor' },
@@ -139,7 +140,7 @@ export const quickActions: QuickAction[] = [
 
 export const siteNotes = [
   'Ensure all medical articles have an assigned medical reviewer.',
-  'Keep service and location pages unique with local information.',
+  'Never publish near-identical location or service×location doorway pages—each indexable URL needs unique intent.',
   'Check and update meta descriptions for low-performing pages.',
   'Maintain accurate review dates for YMYL content.',
   'Monitor 404 errors and fix broken internal links.',

@@ -21,8 +21,10 @@ interface ServerContent {
   title: string
   slug: string
   excerpt?: string | null
-  status: 'DRAFT' | 'IN_REVIEW' | 'SCHEDULED' | 'PUBLISHED' | 'ARCHIVED'
+  body?: { blocks?: ContentBlock[] } | null
+  status: 'DRAFT' | 'IN_REVIEW' | 'MEDICAL_REVIEW' | 'SCHEDULED' | 'PUBLISHED' | 'ARCHIVED'
   updatedAt: string
+  contentChangedAt?: string
   seo?: {
     metaTitle?: string | null
     metaDescription?: string | null
@@ -30,24 +32,439 @@ interface ServerContent {
     robots: string
     excludeFromSitemap: boolean
   } | null
-  subtype?: { key: string; data: { h1?: string; schemaDisabled?: boolean } } | null
+  subtype?: {
+    key: string
+    data: {
+      h1?: string
+      schemaDisabled?: boolean
+      image?: string
+      imageAlt?: string
+      template?: string
+      items?: string[]
+      credentials?: Partial<ProviderCredentials> & { specialty?: string }
+      attribution?: Partial<ArticleAttribution>
+      medicalReview?: Partial<MedicalReview>
+    }
+  } | null
+  references?: Array<{
+    id?: string
+    label: string
+    url: string
+    source?: string | null
+    accessedAt?: string | null
+  }>
+  revisions?: Array<{
+    id: string
+    number: number
+    createdAt: string
+    snapshot?: Record<string, unknown>
+    user?: { id: string; name: string; email: string } | null
+  }>
+  workflowEvents?: Array<{
+    id: string
+    from?: string | null
+    to: string
+    note?: string | null
+    createdAt: string
+    user?: { id: string; name: string; email: string } | null
+  }>
+  sourceRelations?: Array<{
+    type: string
+    order: number
+    targetId: string
+    anchor?: string | null
+    target?: {
+      id: string
+      title: string
+      slug: string
+      type: ContentType
+      excerpt?: string | null
+    } | null
+  }>
 }
 
 export type ContentType = 'PAGE' | 'ARTICLE' | 'SERVICE' | 'CONDITION' | 'PROVIDER' | 'LOCATION' | 'FAQ'
+
+export type PageTemplate = 'default' | 'landing' | 'guide' | 'profile' | 'location' | 'article'
+
+export type RelationKind =
+  | 'related-service'
+  | 'related-condition'
+  | 'related-provider'
+  | 'related-article'
+  | 'related-location'
+  | 'related-faq'
+
+export const RELATION_KIND_META: Array<{
+  kind: RelationKind
+  label: string
+  targetType: ContentType
+  hint: string
+}> = [
+  { kind: 'related-service', label: 'Relevant services offered', targetType: 'SERVICE', hint: 'Treatments/services this doctor offers, or commercial pages this article should link to.' },
+  { kind: 'related-condition', label: 'Related conditions', targetType: 'CONDITION', hint: 'Connect condition guides to this page.' },
+  { kind: 'related-provider', label: 'Related doctors', targetType: 'PROVIDER', hint: 'Link doctors from treatment / service pages.' },
+  { kind: 'related-article', label: 'Related articles', targetType: 'ARTICLE', hint: 'Supporting editorial content.' },
+  { kind: 'related-location', label: 'Practice locations', targetType: 'LOCATION', hint: 'Clinic / city pages where this doctor practices.' },
+  { kind: 'related-faq', label: 'Related FAQs', targetType: 'FAQ', hint: 'Shown as an on-page FAQ accordion.' },
+]
+
+export type ProviderCredentials = {
+  displayName: string
+  /** Structured specializations (one concept per entry). */
+  specializations: string[]
+  /** Structured qualifications / degrees. */
+  qualifications: string[]
+  /** Clinic / hospital affiliations. */
+  affiliations: string[]
+  /** Areas of clinical expertise. */
+  areasOfExpertise: string[]
+  biography: string
+  licenses: string
+  yearsExperience: string
+  languages: string
+}
+
+export const emptyCredentials = (): ProviderCredentials => ({
+  displayName: '',
+  specializations: [],
+  qualifications: [],
+  affiliations: [],
+  areasOfExpertise: [],
+  biography: '',
+  licenses: '',
+  yearsExperience: '',
+  languages: '',
+})
+
+export type ArticleAttribution = {
+  authorName: string
+  authorBio: string
+  authorProfileUrl: string
+  /** Editorial "last genuinely updated" date (YYYY-MM-DD). */
+  lastUpdatedAt: string
+}
+
+export const emptyAttribution = (): ArticleAttribution => ({
+  authorName: '',
+  authorBio: '',
+  authorProfileUrl: '',
+  lastUpdatedAt: '',
+})
+
+export type MedicalReview = {
+  reviewerName: string
+  reviewerCredentials: string
+  /** YYYY-MM-DD when a clinician last medically reviewed the content. */
+  reviewedAt: string
+  statement: string
+}
+
+export const emptyMedicalReview = (): MedicalReview => ({
+  reviewerName: '',
+  reviewerCredentials: '',
+  reviewedAt: '',
+  statement: '',
+})
+
+export function normalizeMedicalReview(raw?: Partial<MedicalReview> | null): MedicalReview {
+  return {
+    ...emptyMedicalReview(),
+    reviewerName: String(raw?.reviewerName || ''),
+    reviewerCredentials: String(raw?.reviewerCredentials || ''),
+    reviewedAt: String(raw?.reviewedAt || '').slice(0, 10),
+    statement: String(raw?.statement || ''),
+  }
+}
+
+export type ContentReference = {
+  id?: string
+  label: string
+  url: string
+  source: string
+  accessedAt: string
+}
+
+export const emptyReference = (): ContentReference => ({
+  label: '',
+  url: '',
+  source: '',
+  accessedAt: '',
+})
+
+export function normalizeReferences(raw?: Array<Partial<ContentReference>> | null): ContentReference[] {
+  if (!Array.isArray(raw)) return []
+  return raw
+    .map((entry) => ({
+      id: entry?.id,
+      label: String(entry?.label || '').trim(),
+      url: String(entry?.url || '').trim(),
+      source: String(entry?.source || '').trim(),
+      accessedAt: String(entry?.accessedAt || '').slice(0, 10),
+    }))
+    .filter((entry) => entry.label && entry.url)
+}
+
+export type EditorialStatus = 'draft' | 'editorial_review' | 'medical_review' | 'published'
+
+export const EDITORIAL_STATUS_LABELS: Record<EditorialStatus, string> = {
+  draft: 'Draft',
+  editorial_review: 'Editorial review',
+  medical_review: 'Medical review',
+  published: 'Published',
+}
+
+export function mapServerStatus(status: ServerContent['status'] | string | undefined): EditorialStatus {
+  switch (status) {
+    case 'PUBLISHED':
+    case 'SCHEDULED':
+    case 'published':
+      return 'published'
+    case 'IN_REVIEW':
+    case 'editorial_review':
+      return 'editorial_review'
+    case 'MEDICAL_REVIEW':
+    case 'medical_review':
+      return 'medical_review'
+    default:
+      return 'draft'
+  }
+}
+
+export function isMedicalContentType(type: ContentType | undefined) {
+  return type === 'ARTICLE' || type === 'CONDITION'
+}
+
+/** Normalize legacy string fields or arrays into clean string lists. */
+export function asStringList(value: unknown): string[] {
+  if (Array.isArray(value)) {
+    return value.map((item) => String(item).trim()).filter(Boolean)
+  }
+  if (typeof value === 'string' && value.trim()) {
+    return value.split(/\n|;/).map((item) => item.trim()).filter(Boolean)
+  }
+  return []
+}
+
+export function linesToList(text: string): string[] {
+  return String(text || '').split('\n').map((item) => item.trim()).filter(Boolean)
+}
+
+export function normalizeCredentials(raw?: Partial<ProviderCredentials> & {
+  specialty?: string
+} | null): ProviderCredentials {
+  const base = emptyCredentials()
+  if (!raw) return base
+  return {
+    displayName: String(raw.displayName || ''),
+    specializations: asStringList(raw.specializations?.length ? raw.specializations : raw.specialty),
+    qualifications: asStringList(raw.qualifications),
+    affiliations: asStringList(raw.affiliations),
+    areasOfExpertise: asStringList(raw.areasOfExpertise),
+    biography: String(raw.biography || ''),
+    licenses: String(raw.licenses || ''),
+    yearsExperience: String(raw.yearsExperience || ''),
+    languages: String(raw.languages || ''),
+  }
+}
+
+export function normalizeAttribution(raw?: Partial<ArticleAttribution> | null): ArticleAttribution {
+  return {
+    ...emptyAttribution(),
+    ...raw,
+    authorName: String(raw?.authorName || ''),
+    authorBio: String(raw?.authorBio || ''),
+    authorProfileUrl: String(raw?.authorProfileUrl || ''),
+    lastUpdatedAt: String(raw?.lastUpdatedAt || '').slice(0, 10),
+  }
+}
+
+export type ContentBlock =
+  | { id: string; type: 'heading'; level: 2 | 3 | 4; text: string }
+  | { id: string; type: 'paragraph'; text: string }
+  | { id: string; type: 'list'; items: string[] }
+
+function sanitizeBlocks(blocks: ContentBlock[] = []): ContentBlock[] {
+  return blocks
+    .map((block) => {
+      if (block.type === 'list') {
+        return {
+          ...block,
+          items: (block.items || []).map((item) => item.trim()).filter(Boolean),
+        }
+      }
+      if (block.type === 'heading' || block.type === 'paragraph') {
+        return { ...block, text: block.text.trim() }
+      }
+      return block
+    })
+    .filter((block) => {
+      if (block.type === 'list') return block.items.length > 0
+      return Boolean(block.text)
+    })
+}
+
+export interface ContentRelationRef {
+  targetId: string
+  type: RelationKind
+  order: number
+  anchor?: string
+  label?: string
+  slug?: string
+  targetType?: ContentType
+}
+
+export interface ContentRevisionSummary {
+  id: string
+  number: number
+  createdAt: string
+  title?: string
+  userName?: string
+}
+
+export interface ContentWorkflowEventSummary {
+  id: string
+  from?: string | null
+  to: string
+  note?: string | null
+  createdAt: string
+  userName?: string
+}
 
 export interface ContentRecord {
   id: string
   type: ContentType
   title: string
   description: string
+  intro: string
   slug: string
   h1: string
+  image: string
+  imageAlt: string
+  template: PageTemplate
+  credentials: ProviderCredentials
+  attribution: ArticleAttribution
+  medicalReview: MedicalReview
+  references: ContentReference[]
+  blocks: ContentBlock[]
+  relations: ContentRelationRef[]
   canonical: string
   robots: string
   sitemapExcluded: boolean
   schemaDisabled: boolean
-  status?: 'draft' | 'published'
+  status?: EditorialStatus
   updatedAt?: string
+  contentChangedAt?: string
+  revisions?: ContentRevisionSummary[]
+  workflowEvents?: ContentWorkflowEventSummary[]
+}
+
+function toRelations(item: ServerContent): ContentRelationRef[] {
+  return (item.sourceRelations || [])
+    .filter((relation) => RELATION_KIND_META.some((meta) => meta.kind === relation.type))
+    .map((relation, index) => ({
+      targetId: relation.targetId,
+      type: relation.type as RelationKind,
+      order: relation.order ?? index,
+      anchor: relation.anchor || '',
+      label: relation.target?.title,
+      slug: relation.target?.slug,
+      targetType: relation.target?.type,
+    }))
+    .sort((a, b) => a.order - b.order)
+}
+
+function toContent(item: ServerContent): ContentRecord {
+  const robots = (item.seo?.robots || 'index,follow').replace(/\s+/g, '')
+  const blocks = Array.isArray(item.body?.blocks)
+    ? item.body.blocks.filter((block): block is ContentBlock => (
+      Boolean(block?.id && (block.type === 'heading' || block.type === 'paragraph' || block.type === 'list'))
+    ))
+    : []
+  const template = (item.subtype?.data?.template || 'default') as PageTemplate
+  return {
+    id: item.id,
+    type: item.type || 'PAGE',
+    title: item.seo?.metaTitle || item.title,
+    description: item.seo?.metaDescription || '',
+    intro: item.excerpt || '',
+    slug: item.slug,
+    h1: item.subtype?.data?.h1 || item.title,
+    image: item.subtype?.data?.image || '',
+    imageAlt: item.subtype?.data?.imageAlt || '',
+    template: ['default', 'landing', 'guide', 'profile', 'location', 'article'].includes(template)
+      ? template
+      : 'default',
+    credentials: normalizeCredentials(item.subtype?.data?.credentials),
+    attribution: normalizeAttribution(item.subtype?.data?.attribution),
+    medicalReview: normalizeMedicalReview(item.subtype?.data?.medicalReview),
+    references: normalizeReferences(item.references),
+    blocks,
+    relations: toRelations(item),
+    canonical: item.seo?.canonicalUrl || '',
+    robots: robots.replace(',', ', '),
+    sitemapExcluded: item.seo?.excludeFromSitemap ?? false,
+    schemaDisabled: item.subtype?.data?.schemaDisabled ?? false,
+    status: mapServerStatus(item.status),
+    updatedAt: item.updatedAt,
+    contentChangedAt: item.contentChangedAt,
+    revisions: (item.revisions || []).map((revision) => ({
+      id: revision.id,
+      number: revision.number,
+      createdAt: revision.createdAt,
+      title: typeof revision.snapshot?.title === 'string' ? revision.snapshot.title : undefined,
+      userName: revision.user?.name || revision.user?.email || undefined,
+    })),
+    workflowEvents: (item.workflowEvents || []).map((event) => ({
+      id: event.id,
+      from: event.from,
+      to: event.to,
+      note: event.note,
+      createdAt: event.createdAt,
+      userName: event.user?.name || event.user?.email || undefined,
+    })),
+  }
+}
+
+function subtypePayload(record: Omit<ContentRecord, 'id'>) {
+  const data: Record<string, unknown> = {
+    h1: record.h1,
+    schemaDisabled: record.schemaDisabled,
+    image: record.image.trim(),
+    imageAlt: record.imageAlt.trim(),
+    template: record.template,
+  }
+  if (record.type === 'PROVIDER') {
+    data.credentials = normalizeCredentials(record.credentials)
+  }
+  if (record.type === 'ARTICLE') {
+    data.attribution = normalizeAttribution(record.attribution)
+  }
+  if (isMedicalContentType(record.type)) {
+    data.medicalReview = normalizeMedicalReview(record.medicalReview)
+  }
+  return {
+    key: record.template === 'default' ? record.type.toLowerCase() : record.template,
+    data,
+  }
+}
+
+function contentWriteBody(record: Omit<ContentRecord, 'id'>) {
+  return {
+    type: record.type,
+    title: record.h1 || record.title,
+    slug: record.slug,
+    excerpt: record.intro,
+    body: { blocks: sanitizeBlocks(record.blocks) },
+    subtype: subtypePayload(record),
+    seo: {
+      metaTitle: record.title,
+      metaDescription: record.description,
+      canonicalUrl: record.canonical || null,
+      robots: record.robots.replace(/\s/g, ''),
+      excludeFromSitemap: record.sitemapExcluded,
+    },
+  }
 }
 
 export interface SitemapBucket {
@@ -69,6 +486,23 @@ export interface RobotsTxtConfig {
   body: string
   isDefault: boolean
   publicUrl: string
+}
+
+export interface UrlPolicy {
+  forceHttps: boolean
+  enforcePreferredHost: boolean
+  lowercasePaths: boolean
+  trailingSlash: 'strip' | 'add'
+  stripQueryParams: boolean
+  allowedQueryParams: string[]
+  indexSearch: boolean
+  indexTags: boolean
+  indexCategories: boolean
+  indexAuthorArchives: boolean
+  indexDateArchives: boolean
+  indexThinArchives: boolean
+  preferredHost?: string | null
+  preferredOrigin?: string | null
 }
 
 export interface RedirectRecord {
@@ -134,24 +568,6 @@ export class ApiError extends Error {
     this.name = 'ApiError'
     this.status = status
     this.errors = errors
-  }
-}
-
-function toContent(item: ServerContent): ContentRecord {
-  const robots = (item.seo?.robots || 'index,follow').replace(/\s+/g, '')
-  return {
-    id: item.id,
-    type: item.type || 'PAGE',
-    title: item.seo?.metaTitle || item.title,
-    description: item.seo?.metaDescription || item.excerpt || '',
-    slug: item.slug,
-    h1: item.subtype?.data?.h1 || item.title,
-    canonical: item.seo?.canonicalUrl || '',
-    robots: robots.replace(',', ', '),
-    sitemapExcluded: item.seo?.excludeFromSitemap ?? false,
-    schemaDisabled: item.subtype?.data?.schemaDisabled ?? false,
-    status: item.status === 'PUBLISHED' ? 'published' : 'draft',
-    updatedAt: item.updatedAt,
   }
 }
 
@@ -305,53 +721,59 @@ class ApiClient {
   }
 
   async createContent(record: Omit<ContentRecord, 'id'>) {
-    const subtypeKey = record.type.toLowerCase()
     const { data } = await this.request<ServerContent>('/contents', {
       method: 'POST',
-      body: {
-        type: record.type,
-        title: record.title,
-        slug: record.slug,
-        excerpt: record.description,
-        body: { blocks: [] },
-        subtype: { key: subtypeKey, data: { h1: record.h1, schemaDisabled: record.schemaDisabled } },
-        seo: {
-          metaTitle: record.title,
-          metaDescription: record.description,
-          canonicalUrl: record.canonical || null,
-          robots: record.robots.replace(/\s/g, ''),
-          excludeFromSitemap: record.sitemapExcluded,
-        },
-      },
+      body: contentWriteBody(record),
     })
-    if (record.status === 'published') {
-      const published = await this.syncContentStatus(data.id, 'draft', 'published')
-      if (published?.record) return published.record
+    await this.saveContentRelations(data.id, record.relations || [])
+    await this.saveContentReferences(data.id, record.references || [])
+    if (record.status && record.status !== 'draft') {
+      await this.syncContentStatus(data.id, 'draft', record.status, record.type)
     }
-    return toContent(data)
+    const refreshed = await this.request<ServerContent>(`/contents/${encodeURIComponent(data.id)}`)
+    return toContent(refreshed.data)
   }
 
   async updateContent(id: string, record: Omit<ContentRecord, 'id'>, previousStatus?: ContentRecord['status']) {
-    const subtypeKey = record.type.toLowerCase()
     const { data } = await this.request<ServerContent>(`/contents/${encodeURIComponent(id)}`, {
       method: 'PATCH',
-      body: {
-        type: record.type,
-        title: record.title,
-        slug: record.slug,
-        excerpt: record.description,
-        subtype: { key: subtypeKey, data: { h1: record.h1, schemaDisabled: record.schemaDisabled } },
-        seo: {
-          metaTitle: record.title,
-          metaDescription: record.description,
-          canonicalUrl: record.canonical || null,
-          robots: record.robots.replace(/\s/g, ''),
-          excludeFromSitemap: record.sitemapExcluded,
-        },
-      },
+      body: contentWriteBody(record),
     })
-    const synced = await this.syncContentStatus(id, previousStatus || data.status, record.status)
-    return synced?.record || toContent(data)
+    await this.saveContentRelations(id, record.relations || [])
+    await this.saveContentReferences(id, record.references || [])
+    await this.syncContentStatus(id, previousStatus || mapServerStatus(data.status), record.status, record.type)
+    const refreshed = await this.request<ServerContent>(`/contents/${encodeURIComponent(id)}`)
+    return toContent(refreshed.data)
+  }
+
+  async getContentById(id: string) {
+    const { data } = await this.request<ServerContent>(`/contents/${encodeURIComponent(id)}`)
+    return toContent(data)
+  }
+
+  async saveContentRelations(id: string, relations: ContentRelationRef[]) {
+    await this.request(`/contents/${encodeURIComponent(id)}/relations`, {
+      method: 'PUT',
+      body: relations.map((relation, order) => ({
+        targetId: relation.targetId,
+        type: relation.type,
+        order,
+        anchor: relation.anchor?.trim() || null,
+      })),
+    })
+  }
+
+  async saveContentReferences(id: string, references: ContentReference[]) {
+    const payload = normalizeReferences(references).map((entry) => ({
+      label: entry.label,
+      url: entry.url,
+      source: entry.source || undefined,
+      accessedAt: entry.accessedAt || undefined,
+    }))
+    await this.request(`/contents/${encodeURIComponent(id)}/references`, {
+      method: 'PUT',
+      body: payload,
+    })
   }
 
   async deleteContent(id: string) {
@@ -359,7 +781,7 @@ class ApiClient {
     return message
   }
 
-  async transitionContent(id: string, status: 'DRAFT' | 'IN_REVIEW' | 'PUBLISHED' | 'SCHEDULED' | 'ARCHIVED') {
+  async transitionContent(id: string, status: 'DRAFT' | 'IN_REVIEW' | 'MEDICAL_REVIEW' | 'PUBLISHED' | 'SCHEDULED' | 'ARCHIVED') {
     const { data, message } = await this.request<ServerContent>(
       `/contents/${encodeURIComponent(id)}/workflow`,
       { method: 'POST', body: { status } },
@@ -367,20 +789,86 @@ class ApiClient {
     return { record: toContent(data), message }
   }
 
-  async syncContentStatus(id: string, current: string | undefined, next: 'draft' | 'published' | undefined) {
+  async checkContentUniqueness(id: string, draft?: Partial<{
+    title: string
+    slug: string
+    description: string
+    intro: string
+    h1: string
+    blocks: ContentBlock[]
+    robots: string
+    type: ContentType
+  }>) {
+    const body = draft
+      ? {
+          title: draft.title,
+          slug: draft.slug,
+          excerpt: draft.intro || draft.description,
+          type: draft.type,
+          body: { blocks: draft.blocks || [] },
+          seo: { robots: (draft.robots || 'index,follow').replace(/\s/g, ''), metaDescription: draft.description },
+          subtype: { key: (draft.type || 'PAGE').toLowerCase(), data: { h1: draft.h1 } },
+        }
+      : {}
+    const { data, message } = await this.request<{
+      ok: boolean
+      skipped?: boolean
+      reasons: string[]
+      matches: Array<{
+        id: string
+        slug: string
+        type: string
+        score: number
+        placeNormalizedScore: number
+        intentScore: number
+      }>
+    }>(`/contents/${encodeURIComponent(id)}/uniqueness-check`, {
+      method: 'POST',
+      body,
+    })
+    return { result: data, message }
+  }
+
+  async syncContentStatus(
+    id: string,
+    current: string | undefined,
+    next: EditorialStatus | undefined,
+    type?: ContentType,
+  ) {
     if (!next) return null
-    const fromPublished = current === 'published' || current === 'PUBLISHED'
-    const toPublished = next === 'published'
-    if (fromPublished === toPublished) return null
-    if (toPublished) {
-      try {
-        await this.transitionContent(id, 'IN_REVIEW')
-      } catch {
-        // Already past draft, continue to publish when allowed.
-      }
-      return this.transitionContent(id, 'PUBLISHED')
+    const from = mapServerStatus(current)
+    const to = mapServerStatus(next)
+    if (from === to) return null
+
+    const medical = isMedicalContentType(type)
+    const pathFor = (target: EditorialStatus): Array<'DRAFT' | 'IN_REVIEW' | 'MEDICAL_REVIEW' | 'PUBLISHED'> => {
+      if (target === 'draft') return ['DRAFT']
+      if (target === 'editorial_review') return ['IN_REVIEW']
+      if (target === 'medical_review') return medical ? ['IN_REVIEW', 'MEDICAL_REVIEW'] : ['IN_REVIEW']
+      if (medical) return ['IN_REVIEW', 'MEDICAL_REVIEW', 'PUBLISHED']
+      return ['IN_REVIEW', 'PUBLISHED']
     }
-    return this.transitionContent(id, 'DRAFT')
+
+    if (to === 'draft') {
+      return this.transitionContent(id, 'DRAFT')
+    }
+
+    // Unpublish / move backward into an earlier queue stage.
+    if (from === 'published' && to !== 'published') {
+      await this.transitionContent(id, 'DRAFT')
+    }
+
+    const steps = pathFor(to)
+    let last = null
+    for (const step of steps) {
+      try {
+        last = await this.transitionContent(id, step)
+      } catch (error) {
+        // Skip steps that are invalid from the current server state (already past them).
+        if (!(error instanceof ApiError) || error.status !== 422) throw error
+      }
+    }
+    return last
   }
 
   async getRedirects() {
@@ -563,6 +1051,24 @@ class ApiClient {
       body: { body },
     })
     return { config: data, message }
+  }
+
+  async getUrlPolicy() {
+    const { data } = await this.request<UrlPolicy>('/seo/url-policy')
+    return data
+  }
+
+  async saveUrlPolicy(policy: Partial<UrlPolicy>) {
+    const {
+      preferredHost: _preferredHost,
+      preferredOrigin: _preferredOrigin,
+      ...body
+    } = policy
+    const { data, message } = await this.request<UrlPolicy>('/seo/url-policy', {
+      method: 'PUT',
+      body,
+    })
+    return { policy: data, message }
   }
 
   getIndexingStatus() {

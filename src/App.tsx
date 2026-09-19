@@ -4,7 +4,7 @@ import { ToastContainer, toast } from 'react-toastify'
 import { api, type AuthUser } from './api/client'
 import { AppShell } from './components/layout/AppShell'
 import { AppointmentsPage } from './pages/AppointmentsPage'
-import { ContentPage, IndexingPage, RedirectsPage, RobotsTxtPage, SitemapPage } from './pages/AdminPages'
+import { ContentPage, IndexingPage, RedirectsPage, RobotsTxtPage, SitemapPage, UrlPolicyPage } from './pages/AdminPages'
 import { DashboardPage } from './pages/DashboardPage'
 import { LoginPage } from './pages/LoginPage'
 import { NotFoundMonitorPage } from './pages/NotFoundMonitorPage'
@@ -24,6 +24,7 @@ const routePaths: Record<string, string> = {
   redirects: '/seo/redirects',
   sitemap: '/seo/sitemap',
   robots: '/seo/robots',
+  'url-policy': '/seo/url-policy',
   indexing: '/seo/indexing',
   '404-monitor': '/seo/404-monitor',
   settings: '/settings',
@@ -108,6 +109,7 @@ function App() {
       case 'redirects': return <RedirectsPage />
       case 'sitemap': return <SitemapPage />
       case 'robots': return <RobotsTxtPage />
+      case 'url-policy': return <UrlPolicyPage />
       case 'indexing': return <IndexingPage />
       case '404-monitor': return <NotFoundMonitorPage />
       case 'settings': return <SettingsPage onUserUpdated={setUser} user={user} />
