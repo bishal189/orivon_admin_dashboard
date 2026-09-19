@@ -4,7 +4,7 @@ import { ToastContainer, toast } from 'react-toastify'
 import { api, type AuthUser } from './api/client'
 import { AppShell } from './components/layout/AppShell'
 import { AppointmentsPage } from './pages/AppointmentsPage'
-import { ContentPage, IndexingPage, RedirectsPage, SitemapPage } from './pages/AdminPages'
+import { ContentPage, IndexingPage, RedirectsPage, RobotsTxtPage, SitemapPage } from './pages/AdminPages'
 import { DashboardPage } from './pages/DashboardPage'
 import { LoginPage } from './pages/LoginPage'
 import { NotFoundMonitorPage } from './pages/NotFoundMonitorPage'
@@ -14,9 +14,16 @@ const routePaths: Record<string, string> = {
   dashboard: '/',
   appointments: '/appointments',
   content: '/pages',
+  services: '/services',
+  conditions: '/conditions',
+  doctors: '/doctors',
+  locations: '/locations',
+  articles: '/articles',
+  faqs: '/faqs',
   'titles-meta': '/seo/titles-meta',
   redirects: '/seo/redirects',
   sitemap: '/seo/sitemap',
+  robots: '/seo/robots',
   indexing: '/seo/indexing',
   '404-monitor': '/seo/404-monitor',
   settings: '/settings',
@@ -90,10 +97,17 @@ function App() {
   const page = (() => {
     switch (route) {
       case 'appointments': return <AppointmentsPage />
-      case 'content': return <ContentPage />
+      case 'content': return <ContentPage contentType="PAGE" />
+      case 'services': return <ContentPage contentType="SERVICE" />
+      case 'conditions': return <ContentPage contentType="CONDITION" />
+      case 'doctors': return <ContentPage contentType="PROVIDER" />
+      case 'locations': return <ContentPage contentType="LOCATION" />
+      case 'articles': return <ContentPage contentType="ARTICLE" />
+      case 'faqs': return <ContentPage contentType="FAQ" />
       case 'titles-meta': return <ContentPage seoOnly />
       case 'redirects': return <RedirectsPage />
       case 'sitemap': return <SitemapPage />
+      case 'robots': return <RobotsTxtPage />
       case 'indexing': return <IndexingPage />
       case '404-monitor': return <NotFoundMonitorPage />
       case 'settings': return <SettingsPage onUserUpdated={setUser} user={user} />

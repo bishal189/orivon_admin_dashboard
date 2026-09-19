@@ -17,6 +17,7 @@ export interface AuthUser {
 
 interface ServerContent {
   id: string
+  type?: 'PAGE' | 'ARTICLE' | 'SERVICE' | 'CONDITION' | 'PROVIDER' | 'LOCATION' | 'FAQ'
   title: string
   slug: string
   excerpt?: string | null
@@ -32,16 +33,11 @@ interface ServerContent {
   subtype?: { key: string; data: { h1?: string; schemaDisabled?: boolean } } | null
 }
 
-interface ServerRedirect {
-  id: string
-  source: string
-  target: string
-  status: 301 | 302
-  enabled: boolean
-}
+export type ContentType = 'PAGE' | 'ARTICLE' | 'SERVICE' | 'CONDITION' | 'PROVIDER' | 'LOCATION' | 'FAQ'
 
 export interface ContentRecord {
   id: string
+  type: ContentType
   title: string
   description: string
   slug: string
@@ -54,19 +50,43 @@ export interface ContentRecord {
   updatedAt?: string
 }
 
+export interface SitemapBucket {
+  key: string
+  label: string
+  types: ContentType[]
+  entries: number
+  url: string
+  lastGeneratedAt?: string | null
+}
+
+export interface SitemapOverview {
+  indexUrl: string
+  totalEntries: number
+  sitemaps: SitemapBucket[]
+}
+
+export interface RobotsTxtConfig {
+  body: string
+  isDefault: boolean
+  publicUrl: string
+}
+
 export interface RedirectRecord {
   id: string
   from: string
   to: string
   statusCode: 301 | 302
   enabled: boolean
+  hits?: number
 }
 
-export interface SitemapStatus {
-  url: string
-  lastGeneratedAt?: string
-  entries: number
-  excluded: number
+interface ServerRedirect {
+  id: string
+  source: string
+  target: string
+  status: 301 | 302
+  enabled: boolean
+  hits?: number
 }
 
 export interface IndexingStatus {
@@ -118,14 +138,16 @@ export class ApiError extends Error {
 }
 
 function toContent(item: ServerContent): ContentRecord {
+  const robots = (item.seo?.robots || 'index,follow').replace(/\s+/g, '')
   return {
     id: item.id,
+    type: item.type || 'PAGE',
     title: item.seo?.metaTitle || item.title,
     description: item.seo?.metaDescription || item.excerpt || '',
     slug: item.slug,
     h1: item.subtype?.data?.h1 || item.title,
     canonical: item.seo?.canonicalUrl || '',
-    robots: item.seo?.robots || 'index,follow',
+    robots: robots.replace(',', ', '),
     sitemapExcluded: item.seo?.excludeFromSitemap ?? false,
     schemaDisabled: item.subtype?.data?.schemaDisabled ?? false,
     status: item.status === 'PUBLISHED' ? 'published' : 'draft',
@@ -250,12 +272,14 @@ class ApiClient {
     page = 1,
     pageSize = 10,
     query = '',
+    type,
     sortBy = 'updatedAt',
     sortDirection = 'desc',
   }: {
     page?: number
     pageSize?: number
     query?: string
+    type?: ContentType
     sortBy?: 'title' | 'status' | 'updatedAt'
     sortDirection?: 'asc' | 'desc'
   } = {}) {
@@ -266,6 +290,7 @@ class ApiClient {
       sortDirection,
     })
     if (query.trim()) params.set('q', query.trim())
+    if (type) params.set('type', type)
 
     const { data, meta } = await this.request<ServerContent[]>(`/contents?${params.toString()}`)
     return {
@@ -280,15 +305,16 @@ class ApiClient {
   }
 
   async createContent(record: Omit<ContentRecord, 'id'>) {
+    const subtypeKey = record.type.toLowerCase()
     const { data } = await this.request<ServerContent>('/contents', {
       method: 'POST',
       body: {
-        type: 'PAGE',
+        type: record.type,
         title: record.title,
         slug: record.slug,
         excerpt: record.description,
         body: { blocks: [] },
-        subtype: { key: 'page', data: { h1: record.h1, schemaDisabled: record.schemaDisabled } },
+        subtype: { key: subtypeKey, data: { h1: record.h1, schemaDisabled: record.schemaDisabled } },
         seo: {
           metaTitle: record.title,
           metaDescription: record.description,
@@ -298,17 +324,23 @@ class ApiClient {
         },
       },
     })
+    if (record.status === 'published') {
+      const published = await this.syncContentStatus(data.id, 'draft', 'published')
+      if (published?.record) return published.record
+    }
     return toContent(data)
   }
 
-  async updateContent(id: string, record: Omit<ContentRecord, 'id'>) {
+  async updateContent(id: string, record: Omit<ContentRecord, 'id'>, previousStatus?: ContentRecord['status']) {
+    const subtypeKey = record.type.toLowerCase()
     const { data } = await this.request<ServerContent>(`/contents/${encodeURIComponent(id)}`, {
       method: 'PATCH',
       body: {
+        type: record.type,
         title: record.title,
         slug: record.slug,
         excerpt: record.description,
-        subtype: { key: 'page', data: { h1: record.h1, schemaDisabled: record.schemaDisabled } },
+        subtype: { key: subtypeKey, data: { h1: record.h1, schemaDisabled: record.schemaDisabled } },
         seo: {
           metaTitle: record.title,
           metaDescription: record.description,
@@ -318,12 +350,37 @@ class ApiClient {
         },
       },
     })
-    return toContent(data)
+    const synced = await this.syncContentStatus(id, previousStatus || data.status, record.status)
+    return synced?.record || toContent(data)
   }
 
   async deleteContent(id: string) {
     const { message } = await this.request<null>(`/contents/${encodeURIComponent(id)}`, { method: 'DELETE' })
     return message
+  }
+
+  async transitionContent(id: string, status: 'DRAFT' | 'IN_REVIEW' | 'PUBLISHED' | 'SCHEDULED' | 'ARCHIVED') {
+    const { data, message } = await this.request<ServerContent>(
+      `/contents/${encodeURIComponent(id)}/workflow`,
+      { method: 'POST', body: { status } },
+    )
+    return { record: toContent(data), message }
+  }
+
+  async syncContentStatus(id: string, current: string | undefined, next: 'draft' | 'published' | undefined) {
+    if (!next) return null
+    const fromPublished = current === 'published' || current === 'PUBLISHED'
+    const toPublished = next === 'published'
+    if (fromPublished === toPublished) return null
+    if (toPublished) {
+      try {
+        await this.transitionContent(id, 'IN_REVIEW')
+      } catch {
+        // Already past draft, continue to publish when allowed.
+      }
+      return this.transitionContent(id, 'PUBLISHED')
+    }
+    return this.transitionContent(id, 'DRAFT')
   }
 
   async getRedirects() {
@@ -334,10 +391,11 @@ class ApiClient {
       to: item.target,
       statusCode: item.status,
       enabled: item.enabled,
+      hits: item.hits ?? 0,
     }))
   }
 
-  async createRedirect(record: Omit<RedirectRecord, 'id'>) {
+  async createRedirect(record: Omit<RedirectRecord, 'id' | 'hits'>) {
     const { data } = await this.request<ServerRedirect>('/redirects', {
       method: 'POST',
       body: {
@@ -353,6 +411,30 @@ class ApiClient {
       to: data.target,
       statusCode: data.status,
       enabled: data.enabled,
+      hits: data.hits ?? 0,
+    }
+  }
+
+  async updateRedirect(id: string, record: Partial<Omit<RedirectRecord, 'id' | 'hits'>>) {
+    const { data, message } = await this.request<ServerRedirect>(`/redirects/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      body: {
+        ...(record.from !== undefined ? { source: record.from } : {}),
+        ...(record.to !== undefined ? { target: record.to } : {}),
+        ...(record.statusCode !== undefined ? { status: record.statusCode } : {}),
+        ...(record.enabled !== undefined ? { enabled: record.enabled } : {}),
+      },
+    })
+    return {
+      record: {
+        id: data.id,
+        from: data.source,
+        to: data.target,
+        statusCode: data.status,
+        enabled: data.enabled,
+        hits: data.hits ?? 0,
+      },
+      message,
     }
   }
 
@@ -462,18 +544,25 @@ class ApiClient {
   }
 
   async getSitemapStatus() {
-    const response = await fetch(`${this.baseUrl.replace(/\/api$/, '')}/sitemap.xml`)
-    if (!response.ok) throw new ApiError('Unable to load sitemap', response.status)
-    const xml = await response.text()
-    return {
-      url: `${this.baseUrl.replace(/\/api$/, '')}/sitemap.xml`,
-      entries: (xml.match(/<url>/g) || []).length,
-      excluded: 0,
-    }
+    const { data } = await this.request<SitemapOverview>('/sitemaps')
+    return data
   }
 
   generateSitemap() {
     return this.getSitemapStatus()
+  }
+
+  async getRobotsTxt() {
+    const { data } = await this.request<RobotsTxtConfig>('/robots-txt')
+    return data
+  }
+
+  async saveRobotsTxt(body: string) {
+    const { data, message } = await this.request<RobotsTxtConfig>('/robots-txt', {
+      method: 'PUT',
+      body: { body },
+    })
+    return { config: data, message }
   }
 
   getIndexingStatus() {

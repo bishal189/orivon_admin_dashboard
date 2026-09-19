@@ -19,14 +19,17 @@ import {
   API_BASE_URL,
   api,
   type ContentRecord,
+  type ContentType,
   type IndexingStatus,
   type RedirectRecord,
-  type SitemapStatus,
+  type RobotsTxtConfig,
+  type SitemapOverview,
 } from '../api/client'
 import { Card } from '../components/ui'
 import { paginationItems } from '../lib/pagination'
 
-const emptyContent: Omit<ContentRecord, 'id'> = {
+const emptyContent = (type: ContentType = 'PAGE'): Omit<ContentRecord, 'id'> => ({
+  type,
   title: '',
   description: '',
   slug: '',
@@ -36,6 +39,26 @@ const emptyContent: Omit<ContentRecord, 'id'> = {
   sitemapExcluded: false,
   schemaDisabled: false,
   status: 'draft',
+})
+
+const contentTypeLabels: Record<ContentType, string> = {
+  PAGE: 'Page',
+  SERVICE: 'Service',
+  CONDITION: 'Condition',
+  PROVIDER: 'Doctor',
+  LOCATION: 'Location',
+  ARTICLE: 'Article',
+  FAQ: 'FAQ',
+}
+
+const contentTypePlurals: Record<ContentType, string> = {
+  PAGE: 'Pages',
+  SERVICE: 'Services',
+  CONDITION: 'Conditions',
+  PROVIDER: 'Doctors',
+  LOCATION: 'Locations',
+  ARTICLE: 'Blog / Articles',
+  FAQ: 'FAQs',
 }
 
 const inputClass = 'mt-1.5 w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-brand-500 focus:ring-3 focus:ring-brand-100'
@@ -67,11 +90,22 @@ function Notice({ message, tone = 'error' }: { message: string; tone?: 'error' |
   )
 }
 
-function ContentForm({ initial, onClose, onSaved }: { initial?: ContentRecord; onClose: () => void; onSaved: (record: ContentRecord) => void }) {
+function ContentForm({
+  initial,
+  defaultType = 'PAGE',
+  onClose,
+  onSaved,
+}: {
+  initial?: ContentRecord
+  defaultType?: ContentType
+  onClose: () => void
+  onSaved: (record: ContentRecord) => void
+}) {
   const titleId = useId()
   const descriptionId = useId()
   const panelRef = useRef<HTMLFormElement>(null)
   const [form, setForm] = useState<Omit<ContentRecord, 'id'>>(initial ? {
+    type: initial.type,
     title: initial.title,
     description: initial.description,
     slug: initial.slug,
@@ -81,7 +115,7 @@ function ContentForm({ initial, onClose, onSaved }: { initial?: ContentRecord; o
     sitemapExcluded: initial.sitemapExcluded,
     schemaDisabled: initial.schemaDisabled,
     status: initial.status,
-  } : emptyContent)
+  } : emptyContent(defaultType))
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const savingRef = useRef(saving)
@@ -131,7 +165,7 @@ function ContentForm({ initial, onClose, onSaved }: { initial?: ContentRecord; o
     setError('')
     try {
       const saved = initial
-        ? await api.updateContent(initial.id, form)
+        ? await api.updateContent(initial.id, form, initial.status)
         : await api.createContent(form)
       toast.success(initial ? 'Content updated successfully' : 'Content created successfully')
       onSaved(saved)
@@ -166,8 +200,8 @@ function ContentForm({ initial, onClose, onSaved }: { initial?: ContentRecord; o
               <FilePenLine className="h-5 w-5" />
             </span>
             <div>
-              <h2 className="text-base font-semibold text-slate-900" id={titleId}>{initial ? 'Edit content & SEO' : 'Create content record'}</h2>
-              <p className="mt-1 text-xs text-slate-500" id={descriptionId}>Configure publishing and search appearance in one place.</p>
+              <h2 className="text-base font-semibold text-slate-900" id={titleId}>{initial ? `Edit ${contentTypeLabels[form.type]}` : `Create ${contentTypeLabels[form.type]}`}</h2>
+              <p className="mt-1 text-xs text-slate-500" id={descriptionId}>Configure SEO title, description, slug, canonical, and robots in one place.</p>
             </div>
           </div>
           <button aria-label="Close form" className="rounded-lg border border-transparent p-2 text-slate-400 transition hover:border-slate-200 hover:bg-slate-50 hover:text-slate-700 focus:outline-none focus:ring-2 focus:ring-brand-500" disabled={saving} onClick={onClose} type="button"><X className="h-4 w-4" /></button>
@@ -182,7 +216,15 @@ function ContentForm({ initial, onClose, onSaved }: { initial?: ContentRecord; o
           <label className="text-xs font-medium text-slate-700">Slug<input className={inputClass} onChange={(event) => setField('slug', event.target.value)} pattern="[a-z0-9]+(?:-[a-z0-9]+)*" placeholder="ivf-treatment-dubai" required value={form.slug} /></label>
           <label className="text-xs font-medium text-slate-700 sm:col-span-2">Meta description<textarea className={`${inputClass} min-h-24 resize-y`} maxLength={170} onChange={(event) => setField('description', event.target.value)} placeholder="Summarize the page benefit and intent in one compelling sentence." required value={form.description} /><span className={`mt-1 block text-right text-[10px] ${form.description.length > 155 ? 'font-semibold text-amber-600' : 'text-slate-400'}`}>{form.description.length}/170</span></label>
           <label className="text-xs font-medium text-slate-700">Page H1<input className={inputClass} onChange={(event) => setField('h1', event.target.value)} placeholder="e.g. Personalized IVF Treatment in Dubai" required value={form.h1} /></label>
-          <label className="text-xs font-medium text-slate-700">Canonical URL<input className={inputClass} onChange={(event) => setField('canonical', event.target.value)} placeholder="https://orivon.com/page" type="url" value={form.canonical} /></label>
+          <label className="text-xs font-medium text-slate-700">
+            Canonical URL
+            <input className={inputClass} onChange={(event) => setField('canonical', event.target.value)} placeholder="Leave blank for self-referencing canonical" type="url" value={form.canonical} />
+            <span className="mt-1 block text-[10px] text-slate-400">
+              {form.canonical.trim()
+                ? 'Manual override in use.'
+                : `Self-referencing: https://orivon.ae/${form.slug || 'page-url'}`}
+            </span>
+          </label>
 
           <div className="rounded-xl border border-slate-200 bg-gradient-to-br from-white to-slate-50 p-4 sm:col-span-2">
             <div className="mb-3 flex items-center justify-between">
@@ -197,7 +239,19 @@ function ContentForm({ initial, onClose, onSaved }: { initial?: ContentRecord; o
           <div className="border-t border-slate-100 pt-5 sm:col-span-2">
             <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-brand-600">Publishing controls</p>
           </div>
-          <label className="text-xs font-medium text-slate-700">Robots directive<select className={inputClass} onChange={(event) => setField('robots', event.target.value)} value={form.robots}><option>index, follow</option><option>noindex, follow</option><option>index, nofollow</option><option>noindex, nofollow</option></select></label>
+          <label className="text-xs font-medium text-slate-700">
+            Robots directive
+            <select
+              className={inputClass}
+              onChange={(event) => setField('robots', event.target.value)}
+              value={form.robots}
+            >
+              <option value="index, follow">index, follow</option>
+              <option value="noindex, follow">noindex, follow</option>
+              <option value="index, nofollow">index, nofollow</option>
+              <option value="noindex, nofollow">noindex, nofollow</option>
+            </select>
+          </label>
           <label className="text-xs font-medium text-slate-700">Publishing status<select className={inputClass} onChange={(event) => setField('status', event.target.value as 'draft' | 'published')} value={form.status}><option value="draft">Draft</option><option value="published">Published</option></select></label>
           <label className={`flex items-start gap-3 rounded-xl border p-3.5 text-xs transition ${form.sitemapExcluded ? 'border-amber-200 bg-amber-50/70 text-amber-800' : 'border-emerald-100 bg-emerald-50/40 text-slate-600'}`}><input checked={form.sitemapExcluded} className="mt-0.5 h-4 w-4 accent-[#1f4d42]" onChange={(event) => setField('sitemapExcluded', event.target.checked)} type="checkbox" /><span><strong className="block font-semibold text-slate-800">Exclude from sitemap</strong>Keep this URL out of generated XML sitemaps.</span></label>
           <label className={`flex items-start gap-3 rounded-xl border p-3.5 text-xs transition ${form.schemaDisabled ? 'border-rose-200 bg-rose-50/70 text-rose-800' : 'border-blue-100 bg-blue-50/40 text-slate-600'}`}><input checked={form.schemaDisabled} className="mt-0.5 h-4 w-4 accent-[#1f4d42]" onChange={(event) => setField('schemaDisabled', event.target.checked)} type="checkbox" /><span><strong className="block font-semibold text-slate-800">Disable schema</strong>Prevent structured data output for this page.</span></label>
@@ -214,7 +268,13 @@ function ContentForm({ initial, onClose, onSaved }: { initial?: ContentRecord; o
   )
 }
 
-export function ContentPage({ seoOnly = false }: { seoOnly?: boolean }) {
+export function ContentPage({
+  seoOnly = false,
+  contentType = 'PAGE',
+}: {
+  seoOnly?: boolean
+  contentType?: ContentType
+}) {
   const [records, setRecords] = useState<ContentRecord[]>([])
   const [editing, setEditing] = useState<ContentRecord | 'new' | null>(null)
   const [query, setQuery] = useState('')
@@ -227,13 +287,26 @@ export function ContentPage({ seoOnly = false }: { seoOnly?: boolean }) {
   const [reloadKey, setReloadKey] = useState(0)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const typeLabel = contentTypeLabels[contentType]
+  const typePlural = contentTypePlurals[contentType]
+
+  useEffect(() => {
+    setPage(1)
+  }, [contentType, seoOnly])
 
   useEffect(() => {
     let cancelled = false
     const timer = window.setTimeout(() => {
       setLoading(true)
       setError('')
-      void api.getContent({ page, pageSize, query, sortBy: sortKey, sortDirection })
+      void api.getContent({
+        page,
+        pageSize,
+        query,
+        type: seoOnly ? undefined : contentType,
+        sortBy: sortKey,
+        sortDirection,
+      })
         .then(({ records: nextRecords, pagination }) => {
           if (cancelled) return
           setRecords(nextRecords)
@@ -241,7 +314,7 @@ export function ContentPage({ seoOnly = false }: { seoOnly?: boolean }) {
           setTotalPages(pagination.pages)
         })
         .catch((requestError: unknown) => {
-          if (!cancelled) setError(`${requestError instanceof Error ? requestError.message : 'Unable to load content'}. API: ${API_BASE_URL}`)
+          if (!cancelled) setError(requestError instanceof Error ? requestError.message : 'Unable to load content')
         })
         .finally(() => {
           if (!cancelled) setLoading(false)
@@ -252,7 +325,7 @@ export function ContentPage({ seoOnly = false }: { seoOnly?: boolean }) {
       cancelled = true
       window.clearTimeout(timer)
     }
-  }, [page, pageSize, query, reloadKey, sortDirection, sortKey])
+  }, [contentType, page, pageSize, query, reloadKey, seoOnly, sortDirection, sortKey])
 
   const remove = async (record: ContentRecord) => {
     if (!window.confirm(`Delete “${record.title}”?`)) return
@@ -282,9 +355,9 @@ export function ContentPage({ seoOnly = false }: { seoOnly?: boolean }) {
 
   return (
     <Page
-      action={<button className={primaryButton} onClick={() => setEditing('new')} type="button"><Plus className="h-4 w-4" />New content</button>}
-      description={seoOnly ? 'Review and edit search titles, descriptions, canonicals and directives.' : 'Create, publish, and maintain website content records.'}
-      title={seoOnly ? 'Titles & Meta' : 'Content'}
+      action={<button className={primaryButton} onClick={() => setEditing('new')} type="button"><Plus className="h-4 w-4" />New {typeLabel.toLowerCase()}</button>}
+      description={seoOnly ? 'Review and edit search titles, descriptions, canonicals and robots for all content types.' : `Create and manage ${typeLabel.toLowerCase()} records with SEO title, meta description, slug, canonical, and index controls.`}
+      title={seoOnly ? 'Titles & Meta' : typePlural}
     >
       {error && <Notice message={error} />}
       <div className="mb-3 flex items-center gap-3">
@@ -295,13 +368,13 @@ export function ContentPage({ seoOnly = false }: { seoOnly?: boolean }) {
         <p aria-live="polite" className="shrink-0 text-[11px] font-medium text-slate-400">{total} results</p>
       </div>
       <Card className="overflow-hidden rounded-md border-[#dfe3e8] bg-white shadow-none">
-        <div aria-label="Pages content table" className="max-h-[580px] overflow-auto focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-400" tabIndex={0}>
+        <div aria-label={`${typePlural} content table`} className="max-h-[580px] overflow-auto focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-400" tabIndex={0}>
           <table className="w-full min-w-[900px] text-left text-xs text-[#344054]">
-            <caption className="sr-only">Manage website pages, SEO directives, sitemap visibility and schema settings.</caption>
+            <caption className="sr-only">Manage {typePlural.toLowerCase()}, SEO directives, sitemap visibility and schema settings.</caption>
             <thead className="sticky top-0 z-[1] border-b border-[#dfe3e8] bg-[#f4f7fa] text-[11px] font-semibold text-[#667085]">
               <tr>
                 {([
-                  ['title', 'Page', 'title'],
+                  ['title', seoOnly ? 'Title' : typeLabel, 'title'],
                   ['status', seoOnly ? 'Meta description' : 'Status', 'status'],
                   ['robots', 'Robots', null],
                   ['sitemap', 'Sitemap', null],
@@ -360,19 +433,26 @@ export function ContentPage({ seoOnly = false }: { seoOnly?: boolean }) {
           </nav>
           </div>
       </Card>
-      {editing && <ContentForm initial={editing === 'new' ? undefined : editing} onClose={() => setEditing(null)} onSaved={() => {
-        const created = editing === 'new'
-        setEditing(null)
-        if (created && page !== 1) setPage(1)
-        else setReloadKey((current) => current + 1)
-      }} />}
+      {editing && (
+        <ContentForm
+          defaultType={contentType}
+          initial={editing === 'new' ? undefined : editing}
+          onClose={() => setEditing(null)}
+          onSaved={() => {
+            const created = editing === 'new'
+            setEditing(null)
+            if (created && page !== 1) setPage(1)
+            else setReloadKey((current) => current + 1)
+          }}
+        />
+      )}
     </Page>
   )
 }
 
 export function RedirectsPage() {
   const [redirects, setRedirects] = useState<RedirectRecord[]>([])
-  const [form, setForm] = useState<Omit<RedirectRecord, 'id'>>({ from: '', to: '', statusCode: 301, enabled: true })
+  const [form, setForm] = useState<Omit<RedirectRecord, 'id' | 'hits'>>({ from: '', to: '', statusCode: 301, enabled: true })
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
 
@@ -398,6 +478,18 @@ export function RedirectsPage() {
     }
   }
 
+  const toggle = async (redirect: RedirectRecord) => {
+    try {
+      const { record } = await api.updateRedirect(redirect.id, { enabled: !redirect.enabled })
+      setRedirects((current) => current.map((item) => (item.id === record.id ? record : item)))
+      toast.success(record.enabled ? 'Redirect enabled' : 'Redirect disabled')
+    } catch (requestError) {
+      const message = requestError instanceof Error ? requestError.message : 'Unable to update redirect'
+      setError(message)
+      toast.error(message)
+    }
+  }
+
   const remove = async (id: string) => {
     try {
       await api.deleteRedirect(id)
@@ -411,23 +503,39 @@ export function RedirectsPage() {
   }
 
   return (
-    <Page description="Route retired URLs to relevant destinations and protect search equity." title="Redirects">
+    <Page description="Manage 301/302 redirects. Changing a content slug automatically creates a permanent redirect from the old URL." title="Redirects">
       {error && <Notice message={`${error}. API: ${API_BASE_URL}`} />}
       <div className="grid gap-4 xl:grid-cols-[380px_1fr]">
         <Card className="h-fit p-5">
           <h2 className="text-sm font-semibold text-slate-800">Add redirect</h2>
           <form className="mt-4 space-y-4" onSubmit={submit}>
             <label className="block text-xs font-medium text-slate-700">Source path<input className={inputClass} onChange={(event) => setForm((current) => ({ ...current, from: event.target.value }))} placeholder="/old-page" required value={form.from} /></label>
-            <label className="block text-xs font-medium text-slate-700">Destination<input className={inputClass} onChange={(event) => setForm((current) => ({ ...current, to: event.target.value }))} placeholder="/new-page or https://..." required value={form.to} /></label>
+            <label className="block text-xs font-medium text-slate-700">Destination<input className={inputClass} onChange={(event) => setForm((current) => ({ ...current, to: event.target.value }))} placeholder="/new-page" required value={form.to} /></label>
             <label className="block text-xs font-medium text-slate-700">Redirect type<select className={inputClass} onChange={(event) => setForm((current) => ({ ...current, statusCode: Number(event.target.value) as 301 | 302 }))} value={form.statusCode}><option value={301}>301 · Permanent</option><option value={302}>302 · Temporary</option></select></label>
             <button className={`${primaryButton} w-full`} disabled={saving} type="submit">{saving ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}Add redirect</button>
           </form>
         </Card>
         <Card className="overflow-hidden">
-          <div className="border-b border-slate-200 p-4"><h2 className="text-sm font-semibold text-slate-800">Active redirects</h2><p className="mt-1 text-[11px] text-slate-400">{redirects.length} configured</p></div>
+          <div className="border-b border-slate-200 p-4">
+            <h2 className="text-sm font-semibold text-slate-800">Active redirects</h2>
+            <p className="mt-1 text-[11px] text-slate-400">{redirects.length} configured · includes auto slug-change 301s</p>
+          </div>
           <div className="divide-y divide-slate-100">
             {redirects.length === 0 && <p className="p-10 text-center text-xs text-slate-400">No redirects configured.</p>}
-            {redirects.map((redirect) => <div className="flex items-center gap-3 p-4" key={redirect.id}><span className="rounded-md bg-brand-50 px-2 py-1 text-[10px] font-semibold text-brand-700">{redirect.statusCode}</span><div className="min-w-0 flex-1"><p className="truncate text-xs font-medium text-slate-700">{redirect.from}</p><p className="mt-1 flex items-center gap-1 truncate text-[10px] text-slate-400"><ExternalLink className="h-3 w-3" />{redirect.to}</p></div><button aria-label="Delete redirect" className="rounded-md p-2 text-red-500 hover:bg-red-50" onClick={() => void remove(redirect.id)} type="button"><Trash2 className="h-4 w-4" /></button></div>)}
+            {redirects.map((redirect) => (
+              <div className="flex items-center gap-3 p-4" key={redirect.id}>
+                <span className={`rounded-md px-2 py-1 text-[10px] font-semibold ${redirect.enabled ? 'bg-brand-50 text-brand-700' : 'bg-slate-100 text-slate-500'}`}>{redirect.statusCode}</span>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-xs font-medium text-slate-700">{redirect.from}</p>
+                  <p className="mt-1 flex items-center gap-1 truncate text-[10px] text-slate-400"><ExternalLink className="h-3 w-3" />{redirect.to}</p>
+                  <p className="mt-1 text-[10px] text-slate-400">{redirect.hits ?? 0} hits · {redirect.enabled ? 'Enabled' : 'Disabled'}</p>
+                </div>
+                <button className="rounded-md px-2 py-1 text-[10px] font-semibold text-slate-600 hover:bg-slate-50" onClick={() => void toggle(redirect)} type="button">
+                  {redirect.enabled ? 'Disable' : 'Enable'}
+                </button>
+                <button aria-label="Delete redirect" className="rounded-md p-2 text-red-500 hover:bg-red-50" onClick={() => void remove(redirect.id)} type="button"><Trash2 className="h-4 w-4" /></button>
+              </div>
+            ))}
           </div>
         </Card>
       </div>
@@ -435,8 +543,89 @@ export function RedirectsPage() {
   )
 }
 
+export function RobotsTxtPage() {
+  const [config, setConfig] = useState<RobotsTxtConfig | null>(null)
+  const [body, setBody] = useState('')
+  const [error, setError] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    void api.getRobotsTxt()
+      .then((next) => {
+        setConfig(next)
+        setBody(next.body)
+      })
+      .catch((requestError: unknown) => setError(requestError instanceof Error ? requestError.message : 'Unable to load robots.txt'))
+      .finally(() => setLoading(false))
+  }, [])
+
+  const save = async (event: FormEvent) => {
+    event.preventDefault()
+    setSaving(true)
+    try {
+      const result = await api.saveRobotsTxt(body)
+      setConfig(result.config)
+      setBody(result.config.body)
+      setError('')
+      toast.success(result.message || 'robots.txt saved')
+    } catch (requestError) {
+      const message = requestError instanceof Error ? requestError.message : 'Unable to save robots.txt'
+      setError(message)
+      toast.error(message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <Page
+      action={config?.publicUrl ? (
+        <a className="inline-flex items-center gap-2 text-xs font-semibold text-brand-700 hover:text-brand-800" href={config.publicUrl} rel="noreferrer" target="_blank">
+          <ExternalLink className="h-4 w-4" />
+          View live file
+        </a>
+      ) : undefined}
+      description="Edit the public robots.txt served at the site root. Changes go live immediately for crawlers."
+      title="Robots.txt"
+    >
+      {error && <Notice message={`${error}. API: ${API_BASE_URL}`} />}
+      <Card className="max-w-3xl p-5">
+        {loading ? (
+          <div className="flex items-center gap-2 text-sm text-slate-500">
+            <LoaderCircle className="h-4 w-4 animate-spin" />
+            Loading robots.txt…
+          </div>
+        ) : (
+          <form onSubmit={(event) => void save(event)}>
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <p className="text-xs text-slate-500">
+                {config?.isDefault ? 'Using the default template.' : 'Custom robots.txt is active.'}
+              </p>
+              {config?.publicUrl && (
+                <span className="font-mono text-[11px] text-slate-400">{config.publicUrl}</span>
+              )}
+            </div>
+            <textarea
+              className={`${inputClass} min-h-72 font-mono text-xs leading-relaxed`}
+              onChange={(event) => setBody(event.target.value)}
+              required
+              spellCheck={false}
+              value={body}
+            />
+            <button className={`${primaryButton} mt-4`} disabled={saving || !body.trim()} type="submit">
+              {saving ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <FilePenLine className="h-4 w-4" />}
+              Save robots.txt
+            </button>
+          </form>
+        )}
+      </Card>
+    </Page>
+  )
+}
+
 export function SitemapPage() {
-  const [status, setStatus] = useState<SitemapStatus | null>(null)
+  const [status, setStatus] = useState<SitemapOverview | null>(null)
   const [error, setError] = useState('')
   const [working, setWorking] = useState(false)
 
@@ -451,7 +640,7 @@ export function SitemapPage() {
     try {
       setStatus(await api.generateSitemap())
       setError('')
-      toast.success('Sitemap refreshed')
+      toast.success('Sitemap index refreshed')
     } catch (requestError) {
       const message = requestError instanceof Error ? requestError.message : 'Unable to generate sitemap'
       setError(message)
@@ -462,13 +651,65 @@ export function SitemapPage() {
   }
 
   return (
-    <Page action={<button className={primaryButton} disabled={working} onClick={() => void generate()} type="button">{working ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}Generate sitemap</button>} description="Monitor sitemap coverage and publish a fresh XML index." title="XML Sitemap">
+    <Page
+      action={(
+        <button className={primaryButton} disabled={working} onClick={() => void generate()} type="button">
+          {working ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+          Refresh sitemaps
+        </button>
+      )}
+      description="Automatic sitemap index with separate XML files for pages, services, conditions, doctors, locations, and articles."
+      title="XML Sitemap"
+    >
       {error && <Notice message={`${error}. API: ${API_BASE_URL}`} />}
       <div className="grid gap-4 sm:grid-cols-3">
-        {[['Included URLs', status?.entries ?? '—'], ['Excluded URLs', status?.excluded ?? '—'], ['Last generated', status?.lastGeneratedAt ? new Date(status.lastGeneratedAt).toLocaleString() : 'Never']].map(([label, value]) => <Card className="p-5" key={label}><p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">{label}</p><p className="mt-2 text-xl font-semibold text-slate-800">{value}</p></Card>)}
+        {[
+          ['Sitemap index', status?.indexUrl ? 'Ready' : '—'],
+          ['Total URLs', status?.totalEntries ?? '—'],
+          ['Typed sitemaps', status?.sitemaps.length ?? '—'],
+        ].map(([label, value]) => (
+          <Card className="p-5" key={label}>
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">{label}</p>
+            <p className="mt-2 break-all text-lg font-semibold text-slate-800">{value}</p>
+          </Card>
+        ))}
       </div>
-      <Card className="mt-4 p-5">
-        <div className="flex items-start gap-3"><CheckCircle2 className="mt-0.5 h-5 w-5 text-emerald-600" /><div><h2 className="text-sm font-semibold text-slate-800">Sitemap endpoint</h2><p className="mt-1 text-xs text-slate-500">{status?.url || 'The sitemap URL will appear after the API responds.'}</p></div></div>
+
+      <Card className="mt-4 overflow-hidden border-[#dfe3e8] shadow-none">
+        <div className="border-b border-slate-100 px-5 py-4">
+          <div className="flex items-start gap-3">
+            <CheckCircle2 className="mt-0.5 h-5 w-5 text-emerald-600" />
+            <div>
+              <h2 className="text-sm font-semibold text-slate-800">Sitemap index</h2>
+              <p className="mt-1 text-xs text-slate-500">{status?.indexUrl || 'The sitemap index URL will appear after the API responds.'}</p>
+            </div>
+          </div>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[640px] text-left text-xs text-slate-700">
+            <thead className="border-b border-slate-100 bg-slate-50 text-[11px] font-semibold text-slate-500">
+              <tr>
+                <th className="px-5 py-2">Content type</th>
+                <th className="px-5 py-2">URLs</th>
+                <th className="px-5 py-2">Endpoint</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {(status?.sitemaps || []).map((item) => (
+                <tr key={item.key}>
+                  <td className="px-5 py-3 font-medium text-slate-800">{item.label}</td>
+                  <td className="px-5 py-3">{item.entries}</td>
+                  <td className="px-5 py-3 font-mono text-[11px] text-slate-500">{item.url}</td>
+                </tr>
+              ))}
+              {!status && (
+                <tr>
+                  <td className="px-5 py-8 text-center text-slate-400" colSpan={3}>Loading typed sitemaps…</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
       </Card>
     </Page>
   )
