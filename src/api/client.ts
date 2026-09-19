@@ -13,6 +13,7 @@ export interface AuthUser {
   email: string
   name: string
   role: 'ADMIN' | 'EDITOR' | 'AUTHOR' | 'VIEWER'
+  totpEnabled?: boolean
 }
 
 interface ServerContent {
@@ -31,6 +32,9 @@ interface ServerContent {
     canonicalUrl?: string | null
     robots: string
     excludeFromSitemap: boolean
+    ogTitle?: string | null
+    ogDescription?: string | null
+    ogImageUrl?: string | null
   } | null
   subtype?: {
     key: string
@@ -39,11 +43,22 @@ interface ServerContent {
       schemaDisabled?: boolean
       image?: string
       imageAlt?: string
+      imageWidth?: number | null
+      imageHeight?: number | null
+      imageFilename?: string
+      imageWebp?: string
+      imageAvif?: string
+      imageSrcSet?: string
+      imageSizes?: string
+      imageIsPrimary?: boolean
+      ogImage?: string
       template?: string
       items?: string[]
-      credentials?: Partial<ProviderCredentials> & { specialty?: string }
+      credentials?: Partial<ProviderCredentials>
       attribution?: Partial<ArticleAttribution>
       medicalReview?: Partial<MedicalReview>
+      locationDetails?: Partial<LocationDetails>
+      video?: Partial<ContentVideo>
     }
   } | null
   references?: Array<{
@@ -152,6 +167,76 @@ export const emptyAttribution = (): ArticleAttribution => ({
   lastUpdatedAt: '',
 })
 
+export type LocationDetails = {
+  name: string
+  streetAddress: string
+  addressLocality: string
+  addressRegion: string
+  postalCode: string
+  addressCountry: string
+  telephone: string
+}
+
+export const emptyLocationDetails = (): LocationDetails => ({
+  name: '',
+  streetAddress: '',
+  addressLocality: '',
+  addressRegion: '',
+  postalCode: '',
+  addressCountry: '',
+  telephone: '',
+})
+
+export function normalizeLocationDetails(raw?: Partial<LocationDetails> | null): LocationDetails {
+  return {
+    ...emptyLocationDetails(),
+    name: String(raw?.name || ''),
+    streetAddress: String(raw?.streetAddress || ''),
+    addressLocality: String(raw?.addressLocality || ''),
+    addressRegion: String(raw?.addressRegion || ''),
+    postalCode: String(raw?.postalCode || ''),
+    addressCountry: String(raw?.addressCountry || ''),
+    telephone: String(raw?.telephone || ''),
+  }
+}
+
+export type ContentVideo = {
+  name: string
+  description: string
+  contentUrl: string
+  embedUrl: string
+  thumbnailUrl: string
+  uploadDate: string
+  duration: string
+}
+
+export const emptyVideo = (): ContentVideo => ({
+  name: '',
+  description: '',
+  contentUrl: '',
+  embedUrl: '',
+  thumbnailUrl: '',
+  uploadDate: '',
+  duration: '',
+})
+
+export function normalizeVideo(raw?: Partial<ContentVideo> | null): ContentVideo {
+  return {
+    ...emptyVideo(),
+    name: String(raw?.name || ''),
+    description: String(raw?.description || ''),
+    contentUrl: String(raw?.contentUrl || '').trim(),
+    embedUrl: String(raw?.embedUrl || '').trim(),
+    thumbnailUrl: String(raw?.thumbnailUrl || '').trim(),
+    uploadDate: String(raw?.uploadDate || '').slice(0, 10),
+    duration: String(raw?.duration || ''),
+  }
+}
+
+export function hasVideoContent(video?: Partial<ContentVideo> | null) {
+  return Boolean(String(video?.contentUrl || '').trim() || String(video?.embedUrl || '').trim())
+}
+
 export type MedicalReview = {
   reviewerName: string
   reviewerCredentials: string
@@ -250,14 +335,15 @@ export function linesToList(text: string): string[] {
   return String(text || '').split('\n').map((item) => item.trim()).filter(Boolean)
 }
 
-export function normalizeCredentials(raw?: Partial<ProviderCredentials> & {
-  specialty?: string
-} | null): ProviderCredentials {
+export function normalizeCredentials(raw?: Partial<ProviderCredentials> | null): ProviderCredentials {
   const base = emptyCredentials()
   if (!raw) return base
+  const legacy = raw as Partial<ProviderCredentials> & { specialty?: string }
   return {
     displayName: String(raw.displayName || ''),
-    specializations: asStringList(raw.specializations?.length ? raw.specializations : raw.specialty),
+    specializations: asStringList(
+      raw.specializations?.length ? raw.specializations : legacy.specialty,
+    ),
     qualifications: asStringList(raw.qualifications),
     affiliations: asStringList(raw.affiliations),
     areasOfExpertise: asStringList(raw.areasOfExpertise),
@@ -283,10 +369,24 @@ export type ContentBlock =
   | { id: string; type: 'heading'; level: 2 | 3 | 4; text: string }
   | { id: string; type: 'paragraph'; text: string }
   | { id: string; type: 'list'; items: string[] }
+  | {
+      id: string
+      type: 'image'
+      url: string
+      alt: string
+      width?: number
+      height?: number
+      filename?: string
+      webpUrl?: string
+      avifUrl?: string
+      srcSet?: string
+      sizes?: string
+      isPrimary?: boolean
+    }
 
 function sanitizeBlocks(blocks: ContentBlock[] = []): ContentBlock[] {
   return blocks
-    .map((block) => {
+    .map((block): ContentBlock | null => {
       if (block.type === 'list') {
         return {
           ...block,
@@ -296,12 +396,27 @@ function sanitizeBlocks(blocks: ContentBlock[] = []): ContentBlock[] {
       if (block.type === 'heading' || block.type === 'paragraph') {
         return { ...block, text: block.text.trim() }
       }
+      if (block.type === 'image') {
+        const url = String(block.url || '').trim()
+        const alt = String(block.alt || '').trim()
+        if (!url || !alt) return null
+        return {
+          ...block,
+          url,
+          alt,
+          filename: String(block.filename || '').trim() || undefined,
+          webpUrl: String(block.webpUrl || '').trim() || undefined,
+          avifUrl: String(block.avifUrl || '').trim() || undefined,
+          srcSet: String(block.srcSet || '').trim() || undefined,
+          sizes: String(block.sizes || '').trim() || undefined,
+          width: Number(block.width) > 0 ? Number(block.width) : undefined,
+          height: Number(block.height) > 0 ? Number(block.height) : undefined,
+          isPrimary: Boolean(block.isPrimary),
+        }
+      }
       return block
     })
-    .filter((block) => {
-      if (block.type === 'list') return block.items.length > 0
-      return Boolean(block.text)
-    })
+    .filter((block): block is ContentBlock => block != null)
 }
 
 export interface ContentRelationRef {
@@ -341,10 +456,23 @@ export interface ContentRecord {
   h1: string
   image: string
   imageAlt: string
+  imageWidth: string
+  imageHeight: string
+  imageFilename: string
+  imageWebp: string
+  imageAvif: string
+  imageSrcSet: string
+  imageSizes: string
+  imageIsPrimary: boolean
+  ogTitle: string
+  ogDescription: string
+  ogImage: string
   template: PageTemplate
   credentials: ProviderCredentials
   attribution: ArticleAttribution
   medicalReview: MedicalReview
+  locationDetails: LocationDetails
+  video: ContentVideo
   references: ContentReference[]
   blocks: ContentBlock[]
   relations: ContentRelationRef[]
@@ -378,7 +506,14 @@ function toContent(item: ServerContent): ContentRecord {
   const robots = (item.seo?.robots || 'index,follow').replace(/\s+/g, '')
   const blocks = Array.isArray(item.body?.blocks)
     ? item.body.blocks.filter((block): block is ContentBlock => (
-      Boolean(block?.id && (block.type === 'heading' || block.type === 'paragraph' || block.type === 'list'))
+      Boolean(
+        block?.id && (
+          block.type === 'heading'
+          || block.type === 'paragraph'
+          || block.type === 'list'
+          || block.type === 'image'
+        ),
+      )
     ))
     : []
   const template = (item.subtype?.data?.template || 'default') as PageTemplate
@@ -392,12 +527,25 @@ function toContent(item: ServerContent): ContentRecord {
     h1: item.subtype?.data?.h1 || item.title,
     image: item.subtype?.data?.image || '',
     imageAlt: item.subtype?.data?.imageAlt || '',
+    imageWidth: item.subtype?.data?.imageWidth != null ? String(item.subtype.data.imageWidth) : '',
+    imageHeight: item.subtype?.data?.imageHeight != null ? String(item.subtype.data.imageHeight) : '',
+    imageFilename: item.subtype?.data?.imageFilename || '',
+    imageWebp: item.subtype?.data?.imageWebp || '',
+    imageAvif: item.subtype?.data?.imageAvif || '',
+    imageSrcSet: item.subtype?.data?.imageSrcSet || '',
+    imageSizes: item.subtype?.data?.imageSizes || '',
+    imageIsPrimary: item.subtype?.data?.imageIsPrimary !== false,
+    ogTitle: item.seo?.ogTitle || '',
+    ogDescription: item.seo?.ogDescription || '',
+    ogImage: item.seo?.ogImageUrl || item.subtype?.data?.ogImage || '',
     template: ['default', 'landing', 'guide', 'profile', 'location', 'article'].includes(template)
       ? template
       : 'default',
     credentials: normalizeCredentials(item.subtype?.data?.credentials),
     attribution: normalizeAttribution(item.subtype?.data?.attribution),
     medicalReview: normalizeMedicalReview(item.subtype?.data?.medicalReview),
+    locationDetails: normalizeLocationDetails(item.subtype?.data?.locationDetails),
+    video: normalizeVideo(item.subtype?.data?.video),
     references: normalizeReferences(item.references),
     blocks,
     relations: toRelations(item),
@@ -432,6 +580,14 @@ function subtypePayload(record: Omit<ContentRecord, 'id'>) {
     schemaDisabled: record.schemaDisabled,
     image: record.image.trim(),
     imageAlt: record.imageAlt.trim(),
+    imageWidth: Number(record.imageWidth) > 0 ? Number(record.imageWidth) : null,
+    imageHeight: Number(record.imageHeight) > 0 ? Number(record.imageHeight) : null,
+    imageFilename: record.imageFilename.trim(),
+    imageWebp: record.imageWebp.trim(),
+    imageAvif: record.imageAvif.trim(),
+    imageSrcSet: record.imageSrcSet.trim(),
+    imageSizes: record.imageSizes.trim(),
+    imageIsPrimary: record.imageIsPrimary,
     template: record.template,
   }
   if (record.type === 'PROVIDER') {
@@ -440,8 +596,17 @@ function subtypePayload(record: Omit<ContentRecord, 'id'>) {
   if (record.type === 'ARTICLE') {
     data.attribution = normalizeAttribution(record.attribution)
   }
+  if (record.type === 'LOCATION') {
+    data.locationDetails = normalizeLocationDetails(record.locationDetails)
+  }
   if (isMedicalContentType(record.type)) {
     data.medicalReview = normalizeMedicalReview(record.medicalReview)
+  }
+  const video = normalizeVideo(record.video)
+  if (hasVideoContent(video)) {
+    data.video = video
+  } else {
+    data.video = null
   }
   return {
     key: record.template === 'default' ? record.type.toLowerCase() : record.template,
@@ -463,6 +628,9 @@ function contentWriteBody(record: Omit<ContentRecord, 'id'>) {
       canonicalUrl: record.canonical || null,
       robots: record.robots.replace(/\s/g, ''),
       excludeFromSitemap: record.sitemapExcluded,
+      ogTitle: record.ogTitle.trim() || null,
+      ogDescription: record.ogDescription.trim() || null,
+      ogImageUrl: record.ogImage.trim() || null,
     },
   }
 }
@@ -503,6 +671,44 @@ export interface UrlPolicy {
   indexThinArchives: boolean
   preferredHost?: string | null
   preferredOrigin?: string | null
+}
+
+export interface SiteVerifications {
+  googleSiteVerification: string
+  bingSiteVerification: string
+}
+
+export interface AnalyticsTracking {
+  gtmContainerId: string
+  ga4MeasurementId: string
+}
+
+export interface ConversionEvent {
+  id: string
+  trigger: 'form_submit' | 'click' | 'page_view'
+  formType?: string
+  match?: string
+  selector?: string
+  ga4EventName: string
+  gtmEventName: string
+  enabled: boolean
+}
+
+export interface AnalyticsConversions {
+  events: ConversionEvent[]
+}
+
+export interface HreflangLocale {
+  hreflang: string
+  pathPrefix: string
+  label: string
+}
+
+export interface HreflangSettings {
+  enabled: boolean
+  defaultLocale: string
+  xDefault: boolean
+  locales: HreflangLocale[]
 }
 
 export interface RedirectRecord {
@@ -931,6 +1137,135 @@ class ApiClient {
     return message
   }
 
+  private async downloadAuthenticated(path: string, filename: string): Promise<void> {
+    const response = await fetch(`${this.baseUrl}${path}`, {
+      credentials: 'include',
+      headers: {
+        Accept: 'text/csv',
+        ...(this.accessToken ? { Authorization: `Bearer ${this.accessToken}` } : {}),
+      },
+    })
+    if (response.status === 401) {
+      const token = await this.refreshAccessToken()
+      if (!token) {
+        this.unauthorizedHandler?.()
+        throw new ApiError('Unauthorized', 401)
+      }
+      await this.downloadAuthenticated(path, filename)
+      return
+    }
+    if (!response.ok) {
+      const body = await response.json().catch(() => null) as { message?: string } | null
+      throw new ApiError(body?.message || `Download failed (${response.status})`, response.status)
+    }
+    const blob = await response.blob()
+    const url = URL.createObjectURL(blob)
+    const anchor = document.createElement('a')
+    anchor.href = url
+    anchor.download = filename
+    anchor.click()
+    URL.revokeObjectURL(url)
+  }
+
+  async exportRedirectsCsv() {
+    await this.downloadAuthenticated('/redirects/export.csv', 'orivon-redirects.csv')
+  }
+
+  async importRedirectsCsv(csv: string, options: { rewriteLinks?: boolean; allowHomepage?: boolean } = {}) {
+    const { data, message } = await this.request<{ upserted: number; errors: string[] }>('/redirects/import.csv', {
+      method: 'POST',
+      body: { csv, ...options },
+    })
+    return { result: data, message }
+  }
+
+  async bulkUpsertRedirects(
+    redirects: Array<{ from: string; to: string; statusCode?: 301 | 302; enabled?: boolean; note?: string }>,
+    options: { rewriteLinks?: boolean; allowHomepage?: boolean } = {},
+  ) {
+    const { data, message } = await this.request<{ upserted: number; errors: string[] }>('/redirects/bulk', {
+      method: 'POST',
+      body: {
+        redirects: redirects.map((item) => ({
+          source: item.from,
+          target: item.to,
+          status: item.statusCode,
+          enabled: item.enabled,
+          note: item.note,
+        })),
+        ...options,
+      },
+    })
+    return { result: data, message }
+  }
+
+  async exportUrlsCsv() {
+    await this.downloadAuthenticated('/seo/urls-export.csv', 'orivon-urls-seo.csv')
+  }
+
+  async exportMetadataCsv() {
+    await this.downloadAuthenticated('/seo/metadata-export.csv', 'orivon-metadata.csv')
+  }
+
+  async importMetadataCsv(csv: string) {
+    const { data, message } = await this.request<{ updated: number; errors: string[] }>('/seo/metadata-import.csv', {
+      method: 'POST',
+      body: { csv },
+    })
+    return { result: data, message }
+  }
+
+  async previewContent(id: string) {
+    const { data, meta } = await this.request<ServerContent>(`/preview/${encodeURIComponent(id)}`)
+    return { record: toContent(data), meta }
+  }
+
+  async retireContent(id: string, input: {
+    replacementPath: string
+    allowHomepageRedirect?: boolean
+    rewriteLinks?: boolean
+  }) {
+    const { data, message } = await this.request<{ redirect: { source: string; target: string }; linksRewritten: number }>(
+      `/contents/${encodeURIComponent(id)}/retire`,
+      { method: 'POST', body: input },
+    )
+    return { data, message }
+  }
+
+  async setupTotp() {
+    const { data } = await this.request<{ secret: string; qrCode: string }>('/auth/totp/setup', { method: 'POST' })
+    return data
+  }
+
+  async enableTotp(code: string) {
+    const { message } = await this.request<{ totpEnabled: boolean }>('/auth/totp/enable', {
+      method: 'POST',
+      body: { code },
+    })
+    return message
+  }
+
+  async disableTotp(input: { code?: string; currentPassword: string }) {
+    const { message } = await this.request<{ totpEnabled: boolean }>('/auth/totp/disable', {
+      method: 'POST',
+      body: input,
+    })
+    return message
+  }
+
+  async getAuditLogs({ limit = 50, offset = 0 }: { limit?: number; offset?: number } = {}) {
+    const { data, meta } = await this.request<Array<{
+      id: string
+      action: string
+      entityType?: string | null
+      entityId?: string | null
+      summary?: string | null
+      createdAt: string
+      user?: { email: string; name: string; role: string } | null
+    }>>(`/audit-logs?limit=${limit}&offset=${offset}`)
+    return { items: data, meta }
+  }
+
   async getNotFoundEvents({
     page = 1,
     pageSize = 20,
@@ -1069,6 +1404,58 @@ class ApiClient {
       body,
     })
     return { policy: data, message }
+  }
+
+  async getVerifications() {
+    const { data } = await this.request<SiteVerifications>('/seo/verifications')
+    return data
+  }
+
+  async saveVerifications(body: Partial<SiteVerifications>) {
+    const { data, message } = await this.request<SiteVerifications>('/seo/verifications', {
+      method: 'PUT',
+      body,
+    })
+    return { verifications: data, message }
+  }
+
+  async getAnalyticsTracking() {
+    const { data } = await this.request<AnalyticsTracking>('/analytics/tracking')
+    return data
+  }
+
+  async saveAnalyticsTracking(body: Partial<AnalyticsTracking>) {
+    const { data, message } = await this.request<AnalyticsTracking>('/analytics/tracking', {
+      method: 'PUT',
+      body,
+    })
+    return { tracking: data, message }
+  }
+
+  async getAnalyticsConversions() {
+    const { data } = await this.request<AnalyticsConversions>('/analytics/conversions')
+    return data
+  }
+
+  async saveAnalyticsConversions(body: AnalyticsConversions) {
+    const { data, message } = await this.request<AnalyticsConversions>('/analytics/conversions', {
+      method: 'PUT',
+      body,
+    })
+    return { conversions: data, message }
+  }
+
+  async getHreflang() {
+    const { data } = await this.request<HreflangSettings>('/seo/hreflang')
+    return data
+  }
+
+  async saveHreflang(body: Partial<HreflangSettings>) {
+    const { data, message } = await this.request<HreflangSettings>('/seo/hreflang', {
+      method: 'PUT',
+      body,
+    })
+    return { hreflang: data, message }
   }
 
   getIndexingStatus() {

@@ -4,23 +4,20 @@ import {
   BookOpen,
   CalendarClock,
   CircleHelp,
-  FileCode2,
   FileText,
-  Image,
+  Languages,
   Link2,
-  ListChecks,
   MapPin,
   Network,
   PanelsTopLeft,
   Route,
   ScanSearch,
+  ScrollText,
   Settings,
   Stethoscope,
   Tags,
   Unlink,
-  UserRoundCheck,
   Users,
-  Video,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -71,44 +68,27 @@ export const navigation: NavigationSection[] = [
     ],
   },
   {
-    label: 'Medical trust',
-    items: [
-      { label: 'Authors', icon: UserRoundCheck },
-      { label: 'Medical Reviewers', icon: Users },
-      { label: 'References', icon: BookOpen },
-      { label: 'Review Queue', icon: ListChecks },
-    ],
-  },
-  {
     label: 'SEO',
     items: [
-      { label: 'SEO Overview', icon: ScanSearch },
       { label: 'Titles & Meta', icon: Tags, route: 'titles-meta' },
-      { label: 'Internal Links', icon: Link2 },
       { label: 'Redirects', icon: Route, route: 'redirects' },
       { label: 'XML Sitemap', icon: Network, route: 'sitemap' },
       { label: 'Robots.txt', icon: FileText, route: 'robots' },
       { label: 'URL & Indexing', icon: ScanSearch, route: 'url-policy' },
+      { label: 'Hreflang', icon: Languages, route: 'hreflang' },
       { label: 'Indexing', icon: PanelsTopLeft, route: 'indexing' },
-      { label: 'Schema', icon: FileCode2 },
       { label: '404 Monitor', icon: Unlink, route: '404-monitor' },
     ],
   },
   {
-    label: 'Media',
-    items: [
-      { label: 'Images', icon: Image },
-      { label: 'Videos', icon: Video },
-    ],
-  },
-  {
     label: 'Analytics',
-    items: [{ label: 'Traffic & Conversions', icon: BarChart3 }],
+    items: [{ label: 'Traffic & Conversions', icon: BarChart3, route: 'traffic-conversions' }],
   },
   {
     label: 'Settings',
     items: [
       { label: 'General Settings', icon: Settings, route: 'settings' },
+      { label: 'Audit logs', icon: ScrollText, route: 'audit-logs' },
     ],
   },
 ]
