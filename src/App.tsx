@@ -8,6 +8,7 @@ import { ContentPage, IndexingPage, RedirectsPage, SitemapPage } from './pages/A
 import { DashboardPage } from './pages/DashboardPage'
 import { LoginPage } from './pages/LoginPage'
 import { NotFoundMonitorPage } from './pages/NotFoundMonitorPage'
+import { SettingsPage } from './pages/SettingsPage'
 
 const routePaths: Record<string, string> = {
   dashboard: '/',
@@ -18,6 +19,7 @@ const routePaths: Record<string, string> = {
   sitemap: '/seo/sitemap',
   indexing: '/seo/indexing',
   '404-monitor': '/seo/404-monitor',
+  settings: '/settings',
 }
 
 function routeFromPath() {
@@ -94,6 +96,7 @@ function App() {
       case 'sitemap': return <SitemapPage />
       case 'indexing': return <IndexingPage />
       case '404-monitor': return <NotFoundMonitorPage />
+      case 'settings': return <SettingsPage onUserUpdated={setUser} user={user} />
       default: return <DashboardPage />
     }
   })()

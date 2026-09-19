@@ -220,6 +220,23 @@ class ApiClient {
     return data
   }
 
+  async updateProfile(input: { name?: string; email?: string; currentPassword?: string }) {
+    const { data, message } = await this.request<AuthUser>('/auth/profile', {
+      method: 'PATCH',
+      body: input,
+    })
+    return { user: data, message }
+  }
+
+  async changePassword(input: { currentPassword: string; newPassword: string }) {
+    const { data, message } = await this.request<{ accessToken: string }>('/auth/change-password', {
+      method: 'POST',
+      body: input,
+    })
+    this.accessToken = data.accessToken
+    return message
+  }
+
   async logout() {
     try {
       const { message } = await this.request<null>('/auth/logout', { method: 'POST' }, false)

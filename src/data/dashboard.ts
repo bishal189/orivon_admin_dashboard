@@ -18,7 +18,6 @@ import {
   Stethoscope,
   Tags,
   Unlink,
-  UserCog,
   UserRoundCheck,
   Users,
   Video,
@@ -108,8 +107,7 @@ export const navigation: NavigationSection[] = [
   {
     label: 'Settings',
     items: [
-      { label: 'General Settings', icon: Settings },
-      { label: 'Users & Permissions', icon: UserCog },
+      { label: 'General Settings', icon: Settings, route: 'settings' },
     ],
   },
 ]
