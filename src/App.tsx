@@ -3,6 +3,7 @@ import { LoaderCircle } from 'lucide-react'
 import { ToastContainer, toast } from 'react-toastify'
 import { api, type AuthUser } from './api/client'
 import { AppShell } from './components/layout/AppShell'
+import { AppointmentsPage } from './pages/AppointmentsPage'
 import { ContentPage, IndexingPage, RedirectsPage, SitemapPage } from './pages/AdminPages'
 import { DashboardPage } from './pages/DashboardPage'
 import { LoginPage } from './pages/LoginPage'
@@ -10,6 +11,7 @@ import { NotFoundMonitorPage } from './pages/NotFoundMonitorPage'
 
 const routePaths: Record<string, string> = {
   dashboard: '/',
+  appointments: '/appointments',
   content: '/pages',
   'titles-meta': '/seo/titles-meta',
   redirects: '/seo/redirects',
@@ -85,6 +87,7 @@ function App() {
 
   const page = (() => {
     switch (route) {
+      case 'appointments': return <AppointmentsPage />
       case 'content': return <ContentPage />
       case 'titles-meta': return <ContentPage seoOnly />
       case 'redirects': return <RedirectsPage />

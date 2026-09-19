@@ -2,6 +2,7 @@ import {
   Activity,
   BarChart3,
   BookOpen,
+  CalendarClock,
   CircleHelp,
   FileCode2,
   FileText,
@@ -52,6 +53,12 @@ export interface QuickAction {
 }
 
 export const navigation: NavigationSection[] = [
+  {
+    label: 'Operations',
+    items: [
+      { label: 'Appointments', icon: CalendarClock, route: 'appointments' },
+    ],
+  },
   {
     label: 'Content',
     items: [
