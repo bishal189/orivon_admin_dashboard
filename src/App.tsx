@@ -119,13 +119,13 @@ function App() {
       case 'traffic-conversions': return <TrafficConversionsPage />
       case 'audit-logs': return <AuditLogsPage />
       case 'settings': return <SettingsPage onUserUpdated={setUser} user={user} />
-      default: return <DashboardPage />
+      default: return <DashboardPage onNavigate={navigate} />
     }
   })()
 
   return (
     <>
-      <AppShell activeRoute={route} onLogout={() => void logout()} onNavigate={navigate} user={user}>
+      <AppShell activeRoute={route} onLogout={logout} onNavigate={navigate} user={user}>
         {page}
       </AppShell>
       <ToastContainer position="top-right" />

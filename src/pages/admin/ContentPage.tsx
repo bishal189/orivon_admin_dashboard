@@ -15,6 +15,7 @@ import {
 import { api, type ContentRecord, type ContentType } from '../../api/client'
 import { EDITORIAL_STATUS_LABELS } from '../../api/client'
 import { Card } from '../../components/ui'
+import { ConfirmDeleteModal } from '../../components/ConfirmDeleteModal'
 import { paginationItems } from '../../lib/pagination'
 import { ContentForm } from './ContentForm'
 import {
@@ -45,6 +46,7 @@ export function ContentPage({
   const [reloadKey, setReloadKey] = useState(0)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [pendingDelete, setPendingDelete] = useState<ContentRecord | null>(null)
   const metaImportRef = useRef<HTMLInputElement>(null)
   const typeLabel = contentTypeLabels[contentType]
   const typePlural = contentTypePlurals[contentType]
@@ -118,12 +120,16 @@ export function ContentPage({
       return
     }
 
-    if (!window.confirm(`Delete “${record.title}”?`)) return
+    setPendingDelete(record)
+  }
+
+  const confirmDelete = async (record: ContentRecord) => {
     try {
       await api.deleteContent(record.id)
       if (records.length === 1 && page > 1) setPage((current) => current - 1)
       else setReloadKey((current) => current + 1)
       toast.success('Content moved to trash')
+      setPendingDelete(null)
     } catch (requestError) {
       const message = requestError instanceof Error ? requestError.message : 'Unable to delete content'
       setError(message)
@@ -300,6 +306,20 @@ export function ContentPage({
             if (created && page !== 1) setPage(1)
             else setReloadKey((current) => current + 1)
           }}
+        />
+      )}
+      {pendingDelete && (
+        <ConfirmDeleteModal
+          title="Delete this page?"
+          description={
+            <>
+              Do you want to delete <span className="font-semibold text-slate-700">“{pendingDelete.title}”</span>?
+              It will be moved to trash.
+            </>
+          }
+          confirmLabel="Delete"
+          onCancel={() => setPendingDelete(null)}
+          onConfirm={() => confirmDelete(pendingDelete)}
         />
       )}
     </Page>

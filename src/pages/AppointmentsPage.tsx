@@ -12,6 +12,7 @@ import {
 import { toast } from 'react-toastify'
 import { api, ApiError } from '../api/client'
 import { Card } from '../components/ui'
+import { ConfirmDeleteModal } from '../components/ConfirmDeleteModal'
 import { paginationItems } from '../lib/pagination'
 import {
   appointmentStatusLabels,
@@ -254,6 +255,7 @@ export function AppointmentsPage() {
   const [reloadKey, setReloadKey] = useState(0)
   const [error, setError] = useState('')
   const [selected, setSelected] = useState<AppointmentRecord | null>(null)
+  const [pendingDelete, setPendingDelete] = useState<AppointmentRecord | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -304,12 +306,12 @@ export function AppointmentsPage() {
   ]), [stats])
 
   const remove = async (record: AppointmentRecord) => {
-    if (!window.confirm(`Delete appointment ${record.reference}?`)) return
     try {
       toast.success(await api.deleteAppointment(record.id))
       if (selected?.id === record.id) setSelected(null)
       if (records.length === 1 && page > 1) setPage((current) => current - 1)
       else refresh()
+      setPendingDelete(null)
     } catch (requestError) {
       toast.error(requestError instanceof Error ? requestError.message : 'Unable to delete appointment')
     }
@@ -429,7 +431,7 @@ export function AppointmentsPage() {
                           className="rounded p-1.5 text-red-500 hover:bg-red-50"
                           onClick={(event) => {
                             event.stopPropagation()
-                            void remove(record)
+                            setPendingDelete(record)
                           }}
                           title="Delete"
                           type="button"
@@ -506,6 +508,20 @@ export function AppointmentsPage() {
             setSelected(record)
             refresh()
           }}
+        />
+      )}
+
+      {pendingDelete && (
+        <ConfirmDeleteModal
+          title="Delete this appointment?"
+          description={
+            <>
+              Do you want to delete booking <span className="font-semibold text-slate-700">{pendingDelete.reference}</span>?
+              This cannot be undone.
+            </>
+          }
+          onCancel={() => setPendingDelete(null)}
+          onConfirm={() => remove(pendingDelete)}
         />
       )}
     </main>

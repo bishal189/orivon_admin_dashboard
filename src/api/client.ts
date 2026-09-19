@@ -711,6 +711,54 @@ export interface HreflangSettings {
   locales: HreflangLocale[]
 }
 
+export interface DashboardOverview {
+  generatedAt: string
+  totals: {
+    content: number
+    pages: number
+    services: number
+    articles: number
+    doctors: number
+    locations: number
+    conditions: number
+    faqs: number
+    redirects: number
+    openNotFound: number
+    appointments: number
+    appointmentsNew: number
+  }
+  byType: Record<string, number>
+  byStatus: Record<string, number>
+  seoHealth: {
+    score: number
+    indexable: number
+    noindex: number
+    missingMetaDescriptions: number
+    missingH1: number
+    redirects: number
+    openNotFound: number
+    sitemapHealthy: boolean
+  }
+  reviewQueue: {
+    draft: number
+    editorialReview: number
+    medicalReview: number
+    scheduled: number
+    published: number
+  }
+  recentContent: Array<{
+    id: string
+    title: string
+    type: string
+    status: string
+    slug: string
+    seoScore: number
+    review: string
+    updatedAt: string
+  }>
+  appointments: Record<string, number>
+}
+
 export interface RedirectRecord {
   id: string
   from: string
@@ -1264,6 +1312,11 @@ class ApiClient {
       user?: { email: string; name: string; role: string } | null
     }>>(`/audit-logs?limit=${limit}&offset=${offset}`)
     return { items: data, meta }
+  }
+
+  async getDashboardOverview() {
+    const { data } = await this.request<DashboardOverview>('/dashboard/overview')
+    return data
   }
 
   async getNotFoundEvents({

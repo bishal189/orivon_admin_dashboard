@@ -10,16 +10,7 @@ import {
 } from 'lucide-react'
 import { navigation } from '../../data/dashboard'
 import type { AuthUser } from '../../api/client'
-
-export function BrandLogo({ compact = false, small = false }: { compact?: boolean; dark?: boolean; small?: boolean }) {
-  return (
-    <img
-      alt="Orivon Health Consultancy"
-      className={`${small ? 'h-14 w-36' : 'h-16 w-44'} object-contain ${compact ? 'lg:w-16' : ''}`}
-      src="/logo.png"
-    />
-  )
-}
+import { ConfirmLogoutModal } from '../ConfirmDeleteModal'
 
 interface SidebarProps {
   activeRoute: string
@@ -47,11 +38,13 @@ function Sidebar({ activeRoute, collapsed, onNavigate, onToggleCollapse, open, o
         />
       )}
       <aside className={`fixed inset-y-0 left-0 z-50 flex w-[232px] flex-col border-r border-[#162d4d] bg-[#0b1f3a] text-white shadow-sm transition-[width,transform] duration-300 lg:translate-x-0 ${collapsed ? 'lg:w-[72px]' : 'lg:w-[232px]'} ${open ? 'translate-x-0' : '-translate-x-full'}`}>
-        <div className={`flex h-[72px] items-center justify-between border-b border-white/10 bg-[#0b1f3a] px-5 ${collapsed ? 'lg:justify-center lg:px-0' : ''}`}>
-          <BrandLogo compact={collapsed} />
+        <div className={`flex h-[72px] items-center border-b border-white/10 bg-[#0b1f3a] px-5 ${collapsed ? 'lg:justify-center lg:px-0' : 'justify-between'}`}>
+          <span className={`text-sm font-semibold tracking-wide text-white ${collapsed ? 'lg:hidden' : ''}`}>
+            Orivon Admin
+          </span>
           <button
             aria-label="Close sidebar"
-            className="rounded-lg p-1.5 text-white/60 hover:bg-white/10 lg:hidden"
+            className="ml-auto rounded-lg p-1.5 text-white/60 hover:bg-white/10 lg:hidden"
             onClick={onClose}
             type="button"
           >
@@ -115,7 +108,7 @@ function Header({
   onMenu,
   user,
 }: {
-  onLogout: () => void
+  onLogout: () => void | Promise<void>
   onMenu: () => void
   user: AuthUser
 }) {
@@ -167,7 +160,7 @@ function Header({
 interface AppShellProps {
   activeRoute: string
   children: ReactNode
-  onLogout: () => void
+  onLogout: () => void | Promise<void>
   onNavigate: (route: string) => void
   user: AuthUser
 }
@@ -175,6 +168,7 @@ interface AppShellProps {
 export function AppShell({ activeRoute, children, onLogout, onNavigate, user }: AppShellProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+  const [confirmLogout, setConfirmLogout] = useState(false)
 
   return (
     <div className="min-h-screen bg-[#f7f8f7]">
@@ -187,9 +181,19 @@ export function AppShell({ activeRoute, children, onLogout, onNavigate, user }: 
         open={sidebarOpen}
       />
       <div className={`transition-[padding] duration-300 ${sidebarCollapsed ? 'lg:pl-[72px]' : 'lg:pl-[232px]'}`}>
-        <Header onLogout={onLogout} onMenu={() => setSidebarOpen(true)} user={user} />
+        <Header onLogout={() => setConfirmLogout(true)} onMenu={() => setSidebarOpen(true)} user={user} />
         {children}
       </div>
+
+      {confirmLogout && (
+        <ConfirmLogoutModal
+          onCancel={() => setConfirmLogout(false)}
+          onConfirm={async () => {
+            await onLogout()
+            setConfirmLogout(false)
+          }}
+        />
+      )}
     </div>
   )
 }

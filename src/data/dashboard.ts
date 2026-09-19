@@ -33,6 +33,8 @@ export interface DashboardStat {
   tone: string
 }
 
+export type { DashboardOverview } from '../api/client'
+
 export interface ContentItem {
   title: string
   type: string
@@ -46,6 +48,7 @@ export interface QuickAction {
   title: string
   description: string
   icon: LucideIcon
+  route?: string
 }
 
 export const navigation: NavigationSection[] = [
@@ -93,29 +96,13 @@ export const navigation: NavigationSection[] = [
   },
 ]
 
-export const dashboardStats: DashboardStat[] = [
-  { value: '128', label: 'Total Pages', icon: FileText, tone: 'bg-emerald-50 text-emerald-700' },
-  { value: '46', label: 'Services', icon: Stethoscope, tone: 'bg-teal-50 text-teal-700' },
-  { value: '34', label: 'Blog Articles', icon: BookOpen, tone: 'bg-sky-50 text-sky-700' },
-  { value: '12', label: 'Doctors', icon: Users, tone: 'bg-lime-50 text-lime-800' },
-  { value: '6', label: 'Clinic Locations', icon: MapPin, tone: 'bg-emerald-50 text-emerald-800' },
-]
-
-export const recentContent: ContentItem[] = [
-  { title: 'IVF Treatment in Dubai', type: 'Service', status: 'Published', seoScore: 96, review: 'Reviewed', updatedAt: 'Aug 30, 2025' },
-  { title: 'Male Infertility: Causes & Treatment', type: 'Article', status: 'Published', seoScore: 91, review: 'Reviewed', updatedAt: 'Aug 28, 2025' },
-  { title: 'Dr. Sarah Ahmed', type: 'Doctor', status: 'Published', seoScore: 88, review: 'Reviewed', updatedAt: 'Aug 26, 2025' },
-  { title: 'PCOS: Symptoms and Management', type: 'Article', status: 'In Review', seoScore: 72, review: 'Pending', updatedAt: 'Aug 24, 2025' },
-  { title: 'Fertility Testing for Women', type: 'Service', status: 'Published', seoScore: 89, review: 'Reviewed', updatedAt: 'Aug 22, 2025' },
-]
-
 export const quickActions: QuickAction[] = [
-  { title: 'Create New Page', description: 'Add a new page to your website', icon: FileText },
-  { title: 'Add a Medical Article', description: 'Write and publish a new article', icon: BookOpen },
-  { title: 'Add a Service', description: 'Create a new treatment/service', icon: Stethoscope },
-  { title: 'Add a Doctor', description: 'Add a new doctor profile', icon: Users },
-  { title: 'Manage Redirects', description: 'Set up 301 redirects', icon: Link2 },
-  { title: 'View Sitemap', description: 'Check your XML sitemap', icon: Network },
+  { title: 'Create New Page', description: 'Add a new page to your website', icon: FileText, route: 'content' },
+  { title: 'Add a Medical Article', description: 'Write and publish a new article', icon: BookOpen, route: 'articles' },
+  { title: 'Add a Service', description: 'Create a new treatment/service', icon: Stethoscope, route: 'services' },
+  { title: 'Add a Doctor', description: 'Add a new doctor profile', icon: Users, route: 'doctors' },
+  { title: 'Manage Redirects', description: 'Set up 301 redirects', icon: Link2, route: 'redirects' },
+  { title: 'View Sitemap', description: 'Check your XML sitemap', icon: Network, route: 'sitemap' },
 ]
 
 export const siteNotes = [

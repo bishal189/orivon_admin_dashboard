@@ -25,7 +25,7 @@ import {
 } from '../../api/client'
 import { BodyBlocksEditor } from '../../components/BodyBlocksEditor'
 import { RelatedContentPickers } from '../../components/RelatedContentPickers'
-import { contentTypeLabels, emptyContent, inputClass, Notice, primaryButton, secondaryButton } from './shared'
+import { contentTypeLabels, emptyContent, fieldInputClass, FieldError, inputClass, isHttpUrl, Notice, primaryButton, secondaryButton, SLUG_PATTERN } from './shared'
 
 export function ContentForm({
   initial,
@@ -84,6 +84,7 @@ export function ContentForm({
   const [error, setError] = useState('')
   const [uniquenessNote, setUniquenessNote] = useState('')
   const [checkingUniqueness, setCheckingUniqueness] = useState(false)
+  const [attempted, setAttempted] = useState(false)
   const savingRef = useRef(saving)
 
   useEffect(() => {
@@ -176,8 +177,49 @@ export function ContentForm({
     }
   }
 
+  const fieldErrors = {
+    h1: !form.h1.trim() ? 'Enter a page H1.' : '',
+    slug: !form.slug.trim()
+      ? 'Enter a slug.'
+      : !SLUG_PATTERN.test(form.slug.trim())
+        ? 'Use lowercase letters, numbers, and hyphens only (e.g. ivf-treatment-dubai).'
+        : '',
+    title: !form.title.trim()
+      ? 'Enter an SEO title.'
+      : form.title.length > 70
+        ? 'SEO title must be 70 characters or fewer.'
+        : '',
+    description: !form.description.trim() ? 'Enter a meta description.' : '',
+    intro: !form.intro.trim() ? 'Enter introductory content.' : '',
+    authorName: form.type === 'ARTICLE' && !form.attribution.authorName.trim()
+      ? 'Enter the author name.'
+      : '',
+    image: form.image.trim() && !isHttpUrl(form.image) ? 'Enter a valid http(s) URL.' : '',
+    imageAlt: form.image.trim() && !form.imageAlt.trim() ? 'Add alt text for the primary image.' : '',
+    imageWidth: form.imageWidth.trim() && !/^\d+$/.test(form.imageWidth.trim())
+      ? 'Enter a whole number in pixels.'
+      : '',
+    imageHeight: form.imageHeight.trim() && !/^\d+$/.test(form.imageHeight.trim())
+      ? 'Enter a whole number in pixels.'
+      : '',
+    imageWebp: form.imageWebp.trim() && !isHttpUrl(form.imageWebp) ? 'Enter a valid http(s) URL.' : '',
+    imageAvif: form.imageAvif.trim() && !isHttpUrl(form.imageAvif) ? 'Enter a valid http(s) URL.' : '',
+    ogImage: form.ogImage.trim() && !isHttpUrl(form.ogImage) ? 'Enter a valid http(s) URL.' : '',
+    canonical: form.canonical.trim() && !isHttpUrl(form.canonical) ? 'Enter a valid http(s) URL.' : '',
+    authorUrl: form.attribution.authorProfileUrl.trim() && !isHttpUrl(form.attribution.authorProfileUrl)
+      ? 'Enter a valid http(s) URL.'
+      : '',
+  }
+  const hasFieldErrors = Object.values(fieldErrors).some(Boolean)
+  const showError = (key: keyof typeof fieldErrors) => attempted && Boolean(fieldErrors[key])
+
   const submit = async (event: FormEvent) => {
     event.preventDefault()
+    setAttempted(true)
+    if (hasFieldErrors) {
+      toast.error('Fix the highlighted fields before saving.')
+      return
+    }
     setSaving(true)
     setError('')
     try {
@@ -241,8 +283,9 @@ export function ContentForm({
         aria-describedby={descriptionId}
         aria-labelledby={titleId}
         aria-modal="true"
-        className="modal-panel max-h-[94dvh] w-full max-w-3xl overflow-y-auto rounded-t-3xl bg-white shadow-[0_24px_80px_rgba(15,23,42,0.28)] ring-1 ring-black/5 sm:max-h-[88dvh] sm:rounded-2xl"
+        className="modal-panel max-h-[94dvh] w-full max-w-2xl overflow-y-auto rounded-t-3xl bg-white shadow-[0_24px_80px_rgba(15,23,42,0.28)] ring-1 ring-black/5 sm:max-h-[88dvh] sm:rounded-2xl"
         onSubmit={submit}
+        noValidate
         ref={panelRef}
         role="dialog"
       >
@@ -287,14 +330,44 @@ export function ContentForm({
           </div>
           <label className="text-xs font-medium text-slate-700">
             Page H1
-            <input className={inputClass} onChange={(event) => setField('h1', event.target.value)} placeholder="e.g. Personalized IVF Treatment in Dubai" required value={form.h1} />
-            <span className="mt-1 block text-[10px] text-slate-400">Visible on-page heading. Exactly one H1 per page.</span>
+            <input
+              aria-describedby={showError('h1') ? 'content-h1-error' : undefined}
+              aria-invalid={showError('h1')}
+              className={fieldInputClass(showError('h1'))}
+              onChange={(event) => setField('h1', event.target.value)}
+              placeholder="e.g. Personalized IVF Treatment in Dubai"
+              value={form.h1}
+            />
+            {showError('h1')
+              ? <FieldError id="content-h1-error" message={fieldErrors.h1} />
+              : <span className="mt-1 block text-[10px] text-slate-400">Visible on-page heading. Exactly one H1 per page.</span>}
           </label>
-          <label className="text-xs font-medium text-slate-700">Slug<input className={inputClass} onChange={(event) => setField('slug', event.target.value)} pattern="[a-z0-9]+(?:-[a-z0-9]+)*" placeholder="ivf-treatment-dubai" required value={form.slug} /></label>
+          <label className="text-xs font-medium text-slate-700">
+            Slug
+            <input
+              aria-describedby={showError('slug') ? 'content-slug-error' : undefined}
+              aria-invalid={showError('slug')}
+              className={fieldInputClass(showError('slug'))}
+              onChange={(event) => setField('slug', event.target.value)}
+              placeholder="ivf-treatment-dubai"
+              value={form.slug}
+            />
+            {showError('slug') && <FieldError id="content-slug-error" message={fieldErrors.slug} />}
+          </label>
           <label className="text-xs font-medium text-slate-700">
             SEO title
-            <input className={inputClass} maxLength={70} onChange={(event) => setField('title', event.target.value)} placeholder="e.g. IVF Treatment in Dubai | Orivon Health" required value={form.title} />
-            <span className="mt-1 block text-[10px] text-slate-400">Document title / SERP title. Not the page H1.</span>
+            <input
+              aria-describedby={showError('title') ? 'content-title-error' : undefined}
+              aria-invalid={showError('title')}
+              className={fieldInputClass(showError('title'))}
+              maxLength={70}
+              onChange={(event) => setField('title', event.target.value)}
+              placeholder="e.g. IVF Treatment in Dubai | Orivon Health"
+              value={form.title}
+            />
+            {showError('title')
+              ? <FieldError id="content-title-error" message={fieldErrors.title} />
+              : <span className="mt-1 block text-[10px] text-slate-400">Document title / SERP title. Not the page H1.</span>}
           </label>
           <label className="text-xs font-medium text-slate-700">
             Page template
@@ -312,16 +385,32 @@ export function ContentForm({
             </select>
             <span className="mt-1 block text-[10px] text-slate-400">Layout only—does not copy content from other pages.</span>
           </label>
-          <label className="text-xs font-medium text-slate-700 sm:col-span-2">Meta description<textarea className={`${inputClass} min-h-24 resize-y`} maxLength={170} onChange={(event) => setField('description', event.target.value)} placeholder="Summarize the page benefit and intent in one compelling sentence." required value={form.description} /><span className={`mt-1 block text-right text-[10px] ${form.description.length > 155 ? 'font-semibold text-amber-600' : 'text-slate-400'}`}>{form.description.length}/170</span></label>
+          <label className="text-xs font-medium text-slate-700 sm:col-span-2">
+            Meta description
+            <textarea
+              aria-describedby={showError('description') ? 'content-description-error' : undefined}
+              aria-invalid={showError('description')}
+              className={fieldInputClass(showError('description'), 'min-h-24 resize-y')}
+              maxLength={170}
+              onChange={(event) => setField('description', event.target.value)}
+              placeholder="Summarize the page benefit and intent in one compelling sentence."
+              value={form.description}
+            />
+            {showError('description')
+              ? <FieldError id="content-description-error" message={fieldErrors.description} />
+              : <span className={`mt-1 block text-right text-[10px] ${form.description.length > 155 ? 'font-semibold text-amber-600' : 'text-slate-400'}`}>{form.description.length}/170</span>}
+          </label>
           <label className="text-xs font-medium text-slate-700 sm:col-span-2">
             Introductory content
             <textarea
-              className={`${inputClass} min-h-24 resize-y`}
+              aria-describedby={showError('intro') ? 'content-intro-error' : undefined}
+              aria-invalid={showError('intro')}
+              className={fieldInputClass(showError('intro'), 'min-h-24 resize-y')}
               onChange={(event) => setField('intro', event.target.value)}
               placeholder="Unique intro shown under the H1. Keep this distinct from other pages."
-              required
               value={form.intro}
             />
+            {showError('intro') && <FieldError id="content-intro-error" message={fieldErrors.intro} />}
           </label>
           <div className="space-y-3 rounded-xl border border-slate-200 bg-white p-4 sm:col-span-2">
             <div>
@@ -333,11 +422,27 @@ export function ContentForm({
             </div>
             <label className="block text-xs font-medium text-slate-700">
               Image URL
-              <input className={inputClass} onChange={(event) => setField('image', event.target.value)} placeholder="https://…/doctor-licensing-dubai.webp" type="url" value={form.image} />
+              <input
+                aria-describedby={showError('image') ? 'content-image-error' : undefined}
+                aria-invalid={showError('image')}
+                className={fieldInputClass(showError('image'))}
+                onChange={(event) => setField('image', event.target.value)}
+                placeholder="https://…/doctor-licensing-dubai.webp"
+                value={form.image}
+              />
+              {showError('image') && <FieldError id="content-image-error" message={fieldErrors.image} />}
             </label>
             <label className="block text-xs font-medium text-slate-700">
               Image alt text
-              <input className={inputClass} onChange={(event) => setField('imageAlt', event.target.value)} placeholder="Describe this specific image for accessibility and SEO" value={form.imageAlt} />
+              <input
+                aria-describedby={showError('imageAlt') ? 'content-image-alt-error' : undefined}
+                aria-invalid={showError('imageAlt')}
+                className={fieldInputClass(showError('imageAlt'))}
+                onChange={(event) => setField('imageAlt', event.target.value)}
+                placeholder="Describe this specific image for accessibility and SEO"
+                value={form.imageAlt}
+              />
+              {showError('imageAlt') && <FieldError id="content-image-alt-error" message={fieldErrors.imageAlt} />}
             </label>
             <label className="block text-xs font-medium text-slate-700">
               Descriptive filename (optional)
@@ -346,21 +451,55 @@ export function ContentForm({
             <div className="grid gap-3 sm:grid-cols-2">
               <label className="block text-xs font-medium text-slate-700">
                 Width (px)
-                <input className={inputClass} onChange={(event) => setField('imageWidth', event.target.value)} inputMode="numeric" placeholder="1200" value={form.imageWidth} />
+                <input
+                  aria-describedby={showError('imageWidth') ? 'content-image-width-error' : undefined}
+                  aria-invalid={showError('imageWidth')}
+                  className={fieldInputClass(showError('imageWidth'))}
+                  onChange={(event) => setField('imageWidth', event.target.value)}
+                  inputMode="numeric"
+                  placeholder="1200"
+                  value={form.imageWidth}
+                />
+                {showError('imageWidth') && <FieldError id="content-image-width-error" message={fieldErrors.imageWidth} />}
               </label>
               <label className="block text-xs font-medium text-slate-700">
                 Height (px)
-                <input className={inputClass} onChange={(event) => setField('imageHeight', event.target.value)} inputMode="numeric" placeholder="800" value={form.imageHeight} />
+                <input
+                  aria-describedby={showError('imageHeight') ? 'content-image-height-error' : undefined}
+                  aria-invalid={showError('imageHeight')}
+                  className={fieldInputClass(showError('imageHeight'))}
+                  onChange={(event) => setField('imageHeight', event.target.value)}
+                  inputMode="numeric"
+                  placeholder="800"
+                  value={form.imageHeight}
+                />
+                {showError('imageHeight') && <FieldError id="content-image-height-error" message={fieldErrors.imageHeight} />}
               </label>
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
               <label className="block text-xs font-medium text-slate-700">
                 WebP URL (optional)
-                <input className={inputClass} onChange={(event) => setField('imageWebp', event.target.value)} placeholder="https://…/image.webp" type="url" value={form.imageWebp} />
+                <input
+                  aria-describedby={showError('imageWebp') ? 'content-image-webp-error' : undefined}
+                  aria-invalid={showError('imageWebp')}
+                  className={fieldInputClass(showError('imageWebp'))}
+                  onChange={(event) => setField('imageWebp', event.target.value)}
+                  placeholder="https://…/image.webp"
+                  value={form.imageWebp}
+                />
+                {showError('imageWebp') && <FieldError id="content-image-webp-error" message={fieldErrors.imageWebp} />}
               </label>
               <label className="block text-xs font-medium text-slate-700">
                 AVIF URL (optional)
-                <input className={inputClass} onChange={(event) => setField('imageAvif', event.target.value)} placeholder="https://…/image.avif" type="url" value={form.imageAvif} />
+                <input
+                  aria-describedby={showError('imageAvif') ? 'content-image-avif-error' : undefined}
+                  aria-invalid={showError('imageAvif')}
+                  className={fieldInputClass(showError('imageAvif'))}
+                  onChange={(event) => setField('imageAvif', event.target.value)}
+                  placeholder="https://…/image.avif"
+                  value={form.imageAvif}
+                />
+                {showError('imageAvif') && <FieldError id="content-image-avif-error" message={fieldErrors.imageAvif} />}
               </label>
             </div>
             <label className="block text-xs font-medium text-slate-700">
@@ -402,18 +541,37 @@ export function ContentForm({
             </label>
             <label className="block text-xs font-medium text-slate-700">
               og:image URL
-              <input className={inputClass} onChange={(event) => setField('ogImage', event.target.value)} placeholder="Defaults to primary page image" type="url" value={form.ogImage} />
+              <input
+                aria-describedby={showError('ogImage') ? 'content-og-image-error' : undefined}
+                aria-invalid={showError('ogImage')}
+                className={fieldInputClass(showError('ogImage'))}
+                onChange={(event) => setField('ogImage', event.target.value)}
+                placeholder="Defaults to primary page image"
+                value={form.ogImage}
+              />
+              {showError('ogImage') && <FieldError id="content-og-image-error" message={fieldErrors.ogImage} />}
             </label>
           </div>
 
           <label className="text-xs font-medium text-slate-700 sm:col-span-2">
             Canonical URL
-            <input className={inputClass} onChange={(event) => setField('canonical', event.target.value)} placeholder="Leave blank for self-referencing canonical" type="url" value={form.canonical} />
-            <span className="mt-1 block text-[10px] text-slate-400">
-              {form.canonical.trim()
-                ? 'Manual override in use.'
-                : `Self-referencing: https://orivon.ae/${form.slug || 'page-url'}`}
-            </span>
+            <input
+              aria-describedby={showError('canonical') ? 'content-canonical-error' : undefined}
+              aria-invalid={showError('canonical')}
+              className={fieldInputClass(showError('canonical'))}
+              onChange={(event) => setField('canonical', event.target.value)}
+              placeholder="Leave blank for self-referencing canonical"
+              value={form.canonical}
+            />
+            {showError('canonical')
+              ? <FieldError id="content-canonical-error" message={fieldErrors.canonical} />
+              : (
+                <span className="mt-1 block text-[10px] text-slate-400">
+                  {form.canonical.trim()
+                    ? 'Manual override in use.'
+                    : `Self-referencing: https://orivon.ae/${form.slug || 'page-url'}`}
+                </span>
+              )}
           </label>
 
           <BodyBlocksEditor
@@ -516,14 +674,16 @@ export function ContentForm({
               <label className="block text-xs font-medium text-slate-700">
                 Author name
                 <input
-                  className={inputClass}
+                  aria-describedby={showError('authorName') ? 'content-author-name-error' : undefined}
+                  aria-invalid={showError('authorName')}
+                  className={fieldInputClass(showError('authorName'))}
                   onChange={(event) => setForm((current) => ({
                     ...current,
                     attribution: { ...current.attribution, authorName: event.target.value },
                   }))}
-                  required
                   value={form.attribution.authorName}
                 />
+                {showError('authorName') && <FieldError id="content-author-name-error" message={fieldErrors.authorName} />}
               </label>
               <label className="block text-xs font-medium text-slate-700">
                 Author biography
@@ -540,15 +700,17 @@ export function ContentForm({
               <label className="block text-xs font-medium text-slate-700">
                 Author profile URL
                 <input
-                  className={inputClass}
+                  aria-describedby={showError('authorUrl') ? 'content-author-url-error' : undefined}
+                  aria-invalid={showError('authorUrl')}
+                  className={fieldInputClass(showError('authorUrl'))}
                   onChange={(event) => setForm((current) => ({
                     ...current,
                     attribution: { ...current.attribution, authorProfileUrl: event.target.value },
                   }))}
                   placeholder="https://…"
-                  type="url"
                   value={form.attribution.authorProfileUrl}
                 />
+                {showError('authorUrl') && <FieldError id="content-author-url-error" message={fieldErrors.authorUrl} />}
               </label>
               <label className="block text-xs font-medium text-slate-700">
                 Last genuinely updated
@@ -906,7 +1068,7 @@ export function ContentForm({
       </form>
       {previewHtml ? (
         <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/60 p-4" onMouseDown={(event) => { if (event.target === event.currentTarget) setPreviewHtml('') }}>
-          <div className="max-h-[90vh] w-full max-w-3xl overflow-auto rounded-2xl bg-white shadow-2xl">
+          <div className="max-h-[90vh] w-full max-w-2xl overflow-auto rounded-2xl bg-white shadow-2xl">
             <div className="sticky top-0 flex items-center justify-between border-b border-slate-200 bg-white px-4 py-3">
               <p className="text-sm font-semibold text-slate-800">Content preview</p>
               <button className="rounded-lg p-2 text-slate-400 hover:bg-slate-50" onClick={() => setPreviewHtml('')} type="button"><X className="h-4 w-4" /></button>

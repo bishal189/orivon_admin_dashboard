@@ -13,6 +13,8 @@ import {
 import { toast } from 'react-toastify'
 import { api, ApiError, type NotFoundRecord } from '../api/client'
 import { Card } from '../components/ui'
+import { ConfirmDeleteModal } from '../components/ConfirmDeleteModal'
+import { fieldInputClass, FieldError, isPathOrUrl } from './admin/shared'
 import { paginationItems } from '../lib/pagination'
 
 type MonitorStatus = 'open' | 'resolved' | 'all'
@@ -40,6 +42,8 @@ export function NotFoundMonitorPage() {
   const [redirecting, setRedirecting] = useState<NotFoundRecord | null>(null)
   const [redirectTarget, setRedirectTarget] = useState('')
   const [saving, setSaving] = useState(false)
+  const [pendingDelete, setPendingDelete] = useState<NotFoundRecord | null>(null)
+  const [redirectAttempted, setRedirectAttempted] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -87,19 +91,27 @@ export function NotFoundMonitorPage() {
   }
 
   const remove = async (record: NotFoundRecord) => {
-    if (!window.confirm(`Delete the 404 record for “${record.path}”?`)) return
     try {
       toast.success(await api.deleteNotFoundEvent(record.id))
       if (records.length === 1 && page > 1) setPage((current) => current - 1)
       else refresh()
+      setPendingDelete(null)
     } catch (requestError) {
       toast.error(requestError instanceof Error ? requestError.message : 'Unable to delete 404 record')
     }
   }
 
+  const redirectTargetError = !redirectTarget.trim()
+    ? 'Enter a destination path.'
+    : !isPathOrUrl(redirectTarget)
+      ? 'Use a path starting with / or a full http(s) URL.'
+      : ''
+
   const createRedirect = async (event: FormEvent) => {
     event.preventDefault()
     if (!redirecting) return
+    setRedirectAttempted(true)
+    if (redirectTargetError) return
     setSaving(true)
     try {
       await api.createRedirect({
@@ -112,6 +124,7 @@ export function NotFoundMonitorPage() {
       toast.success('301 redirect created and 404 resolved')
       setRedirecting(null)
       setRedirectTarget('')
+      setRedirectAttempted(false)
       refresh()
     } catch (requestError) {
       toast.error(requestError instanceof Error ? requestError.message : 'Unable to create redirect')
@@ -130,18 +143,29 @@ export function NotFoundMonitorPage() {
 
         {redirecting && (
           <Card className="mb-4 border-blue-200 bg-blue-50/40 p-4">
-            <form className="flex flex-col gap-3 md:flex-row md:items-end" onSubmit={createRedirect}>
+            <form className="flex flex-col gap-3 md:flex-row md:items-end" noValidate onSubmit={createRedirect}>
               <label className="min-w-0 flex-1 text-xs font-medium text-slate-700">
                 Redirect from
                 <input className="mt-1.5 h-10 w-full rounded-lg border border-slate-200 bg-slate-100 px-3 text-sm text-slate-500" disabled value={redirecting.path} />
               </label>
               <label className="min-w-0 flex-1 text-xs font-medium text-slate-700">
                 Redirect to
-                <input autoFocus className="mt-1.5 h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100" onChange={(event) => setRedirectTarget(event.target.value)} placeholder="/closest-relevant-page" required value={redirectTarget} />
+                <input
+                  aria-describedby={redirectAttempted && redirectTargetError ? 'nf-redirect-to-error' : undefined}
+                  aria-invalid={redirectAttempted && Boolean(redirectTargetError)}
+                  autoFocus
+                  className={fieldInputClass(redirectAttempted && Boolean(redirectTargetError), 'h-10 !py-0')}
+                  onChange={(event) => setRedirectTarget(event.target.value)}
+                  placeholder="/closest-relevant-page"
+                  value={redirectTarget}
+                />
+                {redirectAttempted && redirectTargetError && (
+                  <FieldError id="nf-redirect-to-error" message={redirectTargetError} />
+                )}
               </label>
               <div className="flex gap-2">
                 <button className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-60" disabled={saving} type="submit">{saving && <LoaderCircle className="h-4 w-4 animate-spin" />}Create 301</button>
-                <button aria-label="Cancel redirect" className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 hover:bg-slate-50" disabled={saving} onClick={() => setRedirecting(null)} type="button"><X className="h-4 w-4" /></button>
+                <button aria-label="Cancel redirect" className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 hover:bg-slate-50" disabled={saving} onClick={() => { setRedirecting(null); setRedirectAttempted(false) }} type="button"><X className="h-4 w-4" /></button>
               </div>
             </form>
           </Card>
@@ -190,7 +214,7 @@ export function NotFoundMonitorPage() {
                       <div className="flex justify-end gap-1">
                         {!record.resolvedAt && <button aria-label={`Create redirect for ${record.path}`} className="rounded p-1.5 text-blue-600 hover:bg-blue-50" onClick={() => { setRedirecting(record); setRedirectTarget('') }} title="Create 301 redirect" type="button"><Route className="h-4 w-4" /></button>}
                         <button aria-label={record.resolvedAt ? `Reopen ${record.path}` : `Resolve ${record.path}`} className="rounded p-1.5 text-emerald-600 hover:bg-emerald-50" onClick={() => void setResolved(record, !record.resolvedAt)} title={record.resolvedAt ? 'Reopen' : 'Mark resolved'} type="button">{record.resolvedAt ? <RotateCcw className="h-4 w-4" /> : <CheckCircle2 className="h-4 w-4" />}</button>
-                        <button aria-label={`Delete ${record.path}`} className="rounded p-1.5 text-red-500 hover:bg-red-50" onClick={() => void remove(record)} title="Delete record" type="button"><Trash2 className="h-4 w-4" /></button>
+                        <button aria-label={`Delete ${record.path}`} className="rounded p-1.5 text-red-500 hover:bg-red-50" onClick={() => setPendingDelete(record)} title="Delete record" type="button"><Trash2 className="h-4 w-4" /></button>
                       </div>
                     </td>
                   </tr>
@@ -217,6 +241,21 @@ export function NotFoundMonitorPage() {
           </div>
         </Card>
       </div>
+
+      {pendingDelete && (
+        <ConfirmDeleteModal
+          title="Delete this 404 record?"
+          description={
+            <>
+              Do you want to delete the record for{' '}
+              <span className="font-semibold text-slate-700">“{pendingDelete.path}”</span>?
+              This cannot be undone.
+            </>
+          }
+          onCancel={() => setPendingDelete(null)}
+          onConfirm={() => remove(pendingDelete)}
+        />
+      )}
     </main>
   )
 }
