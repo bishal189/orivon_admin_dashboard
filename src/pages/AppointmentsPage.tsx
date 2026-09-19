@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useId, useMemo, useRef, useState, type FormEvent } from 'react'
 import {
   CalendarClock,
   CheckCircle2,
@@ -22,6 +22,13 @@ import {
   type AppointmentStatusFilter,
 } from '../types/appointments'
 
+const inputClass =
+  'mt-1.5 w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-brand-500 focus:ring-3 focus:ring-brand-100'
+const primaryButton =
+  'inline-flex items-center justify-center gap-2 rounded-lg bg-brand-700 px-4 py-2.5 text-xs font-semibold text-white transition hover:bg-brand-800 disabled:cursor-not-allowed disabled:opacity-60'
+const secondaryButton =
+  'inline-flex items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-600 transition hover:bg-slate-50'
+
 function formatDate(value?: string | null) {
   if (!value) return '—'
   return new Date(value).toLocaleString()
@@ -30,6 +37,208 @@ function formatDate(value?: string | null) {
 function formatDay(value?: string | null) {
   if (!value) return '—'
   return new Date(value).toLocaleDateString()
+}
+
+function AppointmentDetailModal({
+  appointment,
+  onClose,
+  onSaved,
+}: {
+  appointment: AppointmentRecord
+  onClose: () => void
+  onSaved: (record: AppointmentRecord) => void
+}) {
+  const titleId = useId()
+  const descriptionId = useId()
+  const panelRef = useRef<HTMLFormElement>(null)
+  const [detailNotes, setDetailNotes] = useState(appointment.notes || '')
+  const [detailStatus, setDetailStatus] = useState<AppointmentStatus>(appointment.status)
+  const [saving, setSaving] = useState(false)
+  const savingRef = useRef(saving)
+
+  useEffect(() => {
+    savingRef.current = saving
+  }, [saving])
+
+  useEffect(() => {
+    setDetailNotes(appointment.notes || '')
+    setDetailStatus(appointment.status)
+  }, [appointment])
+
+  useEffect(() => {
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    panelRef.current?.querySelector<HTMLElement>('select, textarea, button')?.focus()
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && !savingRef.current) onClose()
+      if (event.key === 'Tab' && panelRef.current) {
+        const focusable = Array.from(
+          panelRef.current.querySelectorAll<HTMLElement>(
+            'button:not([disabled]), input:not([disabled]), textarea:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])',
+          ),
+        )
+        const first = focusable[0]
+        const last = focusable[focusable.length - 1]
+        if (event.shiftKey && document.activeElement === first) {
+          event.preventDefault()
+          last?.focus()
+        } else if (!event.shiftKey && document.activeElement === last) {
+          event.preventDefault()
+          first?.focus()
+        }
+      }
+    }
+    document.addEventListener('keydown', onKeyDown)
+    return () => {
+      document.body.style.overflow = previousOverflow
+      document.removeEventListener('keydown', onKeyDown)
+    }
+  }, [onClose])
+
+  const submit = async (event: FormEvent) => {
+    event.preventDefault()
+    setSaving(true)
+    try {
+      const result = await api.updateAppointment(appointment.id, {
+        status: detailStatus,
+        notes: detailNotes.trim() || null,
+      })
+      toast.success(result.message)
+      onSaved(result.record)
+    } catch (requestError) {
+      toast.error(requestError instanceof Error ? requestError.message : 'Unable to update appointment')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div
+      className="modal-backdrop fixed inset-0 z-[70] flex items-end justify-center bg-slate-950/55 p-0 sm:items-center sm:p-6"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget && !saving) onClose()
+      }}
+    >
+      <form
+        aria-describedby={descriptionId}
+        aria-labelledby={titleId}
+        aria-modal="true"
+        className="modal-panel max-h-[94dvh] w-full max-w-2xl overflow-y-auto rounded-t-3xl bg-white shadow-[0_24px_80px_rgba(15,23,42,0.28)] ring-1 ring-black/5 sm:max-h-[88dvh] sm:rounded-2xl"
+        onSubmit={submit}
+        ref={panelRef}
+        role="dialog"
+      >
+        <div className="sticky top-0 z-10 flex items-start justify-between gap-4 border-b border-slate-200/80 bg-white/95 px-5 py-4 backdrop-blur sm:px-6 sm:py-5">
+          <div className="flex gap-3">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-50 text-brand-700">
+              <CalendarClock className="h-5 w-5" />
+            </span>
+            <div>
+              <h2 className="text-base font-semibold text-slate-900" id={titleId}>Booking details</h2>
+              <p className="mt-1 text-xs text-slate-500" id={descriptionId}>
+                Review the website submission and update tracking status.
+              </p>
+            </div>
+          </div>
+          <button
+            aria-label="Close form"
+            className="rounded-lg border border-transparent p-2 text-slate-400 transition hover:border-slate-200 hover:bg-slate-50 hover:text-slate-700 focus:outline-none focus:ring-2 focus:ring-brand-500"
+            disabled={saving}
+            onClick={onClose}
+            type="button"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        <div className="grid gap-5 p-5 sm:grid-cols-2 sm:p-6">
+          <div className="sm:col-span-2">
+            <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-brand-600">Submission</p>
+            <p className="mt-1 text-xs text-slate-400">Details received from the client website form.</p>
+          </div>
+
+          <div className="rounded-xl border border-slate-200 bg-gradient-to-br from-white to-slate-50 p-4 sm:col-span-2">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <p className="font-mono text-[11px] font-semibold text-slate-500">{appointment.reference}</p>
+                <h3 className="mt-1 text-lg font-semibold text-slate-900">{appointment.name}</h3>
+                <p className="mt-1 text-xs text-slate-500">
+                  {appointment.email}
+                  {appointment.phone ? ` · ${appointment.phone}` : ''}
+                </p>
+              </div>
+              <span className={`rounded-sm px-2 py-1 text-[10px] font-medium ${appointmentStatusStyles[appointment.status]}`}>
+                {appointmentStatusLabels[appointment.status]}
+              </span>
+            </div>
+          </div>
+
+          {[
+            ['Service', appointment.service || '—'],
+            ['Destination', appointment.destination || '—'],
+            ['Country', appointment.country || '—'],
+            ['Role', appointment.role || '—'],
+            ['Preferred date', formatDay(appointment.preferredDate)],
+            ['Source', appointment.source],
+            ['Received', formatDate(appointment.createdAt)],
+            ['Last updated', formatDate(appointment.updatedAt)],
+          ].map(([label, value]) => (
+            <div className="rounded-xl border border-slate-100 bg-slate-50/70 px-3.5 py-3" key={label}>
+              <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-400">{label}</p>
+              <p className="mt-1 text-sm font-medium text-slate-800">{value}</p>
+            </div>
+          ))}
+
+          {appointment.message && (
+            <div className="rounded-xl border border-slate-200 bg-white p-4 sm:col-span-2">
+              <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">Message</p>
+              <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-700">{appointment.message}</p>
+            </div>
+          )}
+
+          <div className="border-t border-slate-100 pt-5 sm:col-span-2">
+            <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-brand-600">Tracking</p>
+            <p className="mt-1 text-xs text-slate-400">Update progress and keep internal notes.</p>
+          </div>
+
+          <label className="text-xs font-medium text-slate-700">
+            Status
+            <select
+              className={inputClass}
+              onChange={(event) => setDetailStatus(event.target.value as AppointmentStatus)}
+              value={detailStatus}
+            >
+              {(Object.keys(appointmentStatusLabels) as AppointmentStatus[]).map((key) => (
+                <option key={key} value={key}>{appointmentStatusLabels[key]}</option>
+              ))}
+            </select>
+          </label>
+
+          <label className="text-xs font-medium text-slate-700 sm:col-span-2">
+            Internal notes
+            <textarea
+              className={`${inputClass} min-h-28 resize-y`}
+              onChange={(event) => setDetailNotes(event.target.value)}
+              placeholder="Call notes, follow-ups, coordinator comments..."
+              value={detailNotes}
+            />
+          </label>
+        </div>
+
+        <div className="sticky bottom-0 flex flex-col-reverse gap-2 border-t border-slate-200/80 bg-slate-50/95 px-5 py-4 backdrop-blur sm:flex-row sm:items-center sm:justify-between sm:px-6">
+          <p className="hidden text-[11px] text-slate-400 sm:block">Press Esc to close</p>
+          <div className="flex justify-end gap-2">
+            <button className={secondaryButton} disabled={saving} onClick={onClose} type="button">Cancel</button>
+            <button className={`${primaryButton} min-w-32`} disabled={saving} type="submit">
+              {saving ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
+              Save updates
+            </button>
+          </div>
+        </div>
+      </form>
+    </div>
+  )
 }
 
 export function AppointmentsPage() {
@@ -45,9 +254,6 @@ export function AppointmentsPage() {
   const [reloadKey, setReloadKey] = useState(0)
   const [error, setError] = useState('')
   const [selected, setSelected] = useState<AppointmentRecord | null>(null)
-  const [detailNotes, setDetailNotes] = useState('')
-  const [detailStatus, setDetailStatus] = useState<AppointmentStatus>('NEW')
-  const [saving, setSaving] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -86,12 +292,6 @@ export function AppointmentsPage() {
     }
   }, [page, pageSize, query, reloadKey, status])
 
-  useEffect(() => {
-    if (!selected) return
-    setDetailNotes(selected.notes || '')
-    setDetailStatus(selected.status)
-  }, [selected])
-
   const refresh = () => setReloadKey((current) => current + 1)
 
   const statusFilters = useMemo(() => ([
@@ -102,24 +302,6 @@ export function AppointmentsPage() {
     { key: 'COMPLETED' as const, label: 'Completed', count: stats?.COMPLETED ?? 0 },
     { key: 'CANCELLED' as const, label: 'Cancelled', count: stats?.CANCELLED ?? 0 },
   ]), [stats])
-
-  const saveDetail = async () => {
-    if (!selected) return
-    setSaving(true)
-    try {
-      const result = await api.updateAppointment(selected.id, {
-        status: detailStatus,
-        notes: detailNotes.trim() || null,
-      })
-      toast.success(result.message)
-      setSelected(result.record)
-      refresh()
-    } catch (requestError) {
-      toast.error(requestError instanceof Error ? requestError.message : 'Unable to update appointment')
-    } finally {
-      setSaving(false)
-    }
-  }
 
   const remove = async (record: AppointmentRecord) => {
     if (!window.confirm(`Delete appointment ${record.reference}?`)) return
@@ -168,245 +350,164 @@ export function AppointmentsPage() {
 
         {error && <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-800">{error}</div>}
 
-        <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
-          <div>
-            <div className="mb-3 flex flex-col gap-2 sm:flex-row">
-              <label className="relative min-w-0 flex-1">
-                <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
-                <input
-                  className="h-9 w-full rounded-md border border-slate-200 bg-white pl-9 pr-3 text-xs text-slate-700 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-                  onChange={(event) => {
-                    setQuery(event.target.value)
-                    setPage(1)
-                  }}
-                  placeholder="Search name, email, phone, reference..."
-                  type="search"
-                  value={query}
-                />
-              </label>
-              <p aria-live="polite" className="self-center text-[11px] font-medium text-slate-400">{total} results</p>
-            </div>
+        <div className="mb-3 flex flex-col gap-2 sm:flex-row">
+          <label className="relative min-w-0 flex-1">
+            <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
+            <input
+              className="h-9 w-full rounded-md border border-slate-200 bg-white pl-9 pr-3 text-xs text-slate-700 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+              onChange={(event) => {
+                setQuery(event.target.value)
+                setPage(1)
+              }}
+              placeholder="Search name, email, phone, reference..."
+              type="search"
+              value={query}
+            />
+          </label>
+          <p aria-live="polite" className="self-center text-[11px] font-medium text-slate-400">{total} results</p>
+        </div>
 
-            <Card className="overflow-hidden rounded-md border-[#dfe3e8] bg-white shadow-none">
-              <div className="overflow-x-auto">
-                <table className="w-full min-w-[860px] text-left text-xs text-[#344054]">
-                  <caption className="sr-only">Appointment booking requests from the website</caption>
-                  <thead className="border-b border-[#dfe3e8] bg-[#f4f7fa] text-[11px] font-semibold text-[#667085]">
-                    <tr>
-                      <th className="px-4 py-2">Reference</th>
-                      <th className="px-4 py-2">Patient</th>
-                      <th className="px-4 py-2">Service</th>
-                      <th className="px-4 py-2">Preferred</th>
-                      <th className="px-4 py-2">Status</th>
-                      <th className="px-4 py-2">Received</th>
-                      <th className="px-4 py-2 text-right">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-[#e4e7ec]">
-                    {loading && (
-                      <tr>
-                        <td className="px-4 py-10 text-center text-slate-400" colSpan={7}>
-                          <LoaderCircle className="mx-auto h-5 w-5 animate-spin" />
-                        </td>
-                      </tr>
-                    )}
-                    {!loading && records.length === 0 && (
-                      <tr>
-                        <td className="px-4 py-10 text-center text-slate-400" colSpan={7}>No appointments found.</td>
-                      </tr>
-                    )}
-                    {!loading && records.map((record) => (
-                      <tr
-                        className={`cursor-pointer hover:bg-slate-50 ${selected?.id === record.id ? 'bg-sky-50/60' : ''}`}
-                        key={record.id}
-                        onClick={() => setSelected(record)}
-                      >
-                        <th className="px-4 py-3 font-mono text-[11px] font-medium text-slate-800" scope="row">
-                          {record.reference}
-                        </th>
-                        <td className="px-4 py-3">
-                          <p className="font-medium text-slate-800">{record.name}</p>
-                          <p className="text-[11px] text-slate-500">{record.email}</p>
-                        </td>
-                        <td className="max-w-[160px] px-4 py-3 text-[11px] text-slate-600">
-                          <p className="truncate">{record.service || '—'}</p>
-                        </td>
-                        <td className="whitespace-nowrap px-4 py-3 text-[11px] text-slate-500">
-                          {formatDay(record.preferredDate)}
-                        </td>
-                        <td className="px-4 py-3">
-                          <span className={`rounded-sm px-2 py-1 text-[10px] font-medium ${appointmentStatusStyles[record.status]}`}>
-                            {appointmentStatusLabels[record.status]}
-                          </span>
-                        </td>
-                        <td className="whitespace-nowrap px-4 py-3 text-[11px] text-slate-500">
-                          {formatDate(record.createdAt)}
-                        </td>
-                        <td className="px-4 py-3">
-                          <div className="flex justify-end gap-1">
-                            <button
-                              aria-label={`Delete ${record.reference}`}
-                              className="rounded p-1.5 text-red-500 hover:bg-red-50"
-                              onClick={(event) => {
-                                event.stopPropagation()
-                                void remove(record)
-                              }}
-                              title="Delete"
-                              type="button"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-              <div className="flex items-center justify-between border-t border-[#dfe3e8] px-4 py-3">
-                <label className="flex items-center gap-2 text-[11px] font-medium text-[#475467]">
-                  <select
-                    className="h-8 rounded-md border border-[#dfe3e8] bg-white px-2.5"
-                    onChange={(event) => {
-                      setPageSize(Number(event.target.value))
-                      setPage(1)
-                    }}
-                    value={pageSize}
+        <Card className="overflow-hidden rounded-md border-[#dfe3e8] bg-white shadow-none">
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[860px] text-left text-xs text-[#344054]">
+              <caption className="sr-only">Appointment booking requests from the website</caption>
+              <thead className="border-b border-[#dfe3e8] bg-[#f4f7fa] text-[11px] font-semibold text-[#667085]">
+                <tr>
+                  <th className="px-4 py-2">Reference</th>
+                  <th className="px-4 py-2">Patient</th>
+                  <th className="px-4 py-2">Service</th>
+                  <th className="px-4 py-2">Preferred</th>
+                  <th className="px-4 py-2">Status</th>
+                  <th className="px-4 py-2">Received</th>
+                  <th className="px-4 py-2 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[#e4e7ec]">
+                {loading && (
+                  <tr>
+                    <td className="px-4 py-10 text-center text-slate-400" colSpan={7}>
+                      <LoaderCircle className="mx-auto h-5 w-5 animate-spin" />
+                    </td>
+                  </tr>
+                )}
+                {!loading && records.length === 0 && (
+                  <tr>
+                    <td className="px-4 py-10 text-center text-slate-400" colSpan={7}>No appointments found.</td>
+                  </tr>
+                )}
+                {!loading && records.map((record) => (
+                  <tr
+                    className="cursor-pointer hover:bg-slate-50"
+                    key={record.id}
+                    onClick={() => setSelected(record)}
                   >
-                    <option value={10}>10</option>
-                    <option value={20}>20</option>
-                    <option value={50}>50</option>
-                  </select>
-                  Entries Per Page
-                </label>
-                <nav aria-label="Appointments pagination" className="flex items-center gap-1">
-                  <button
-                    aria-label="Previous page"
-                    className="inline-flex h-8 w-8 items-center justify-center rounded-md text-slate-500 hover:bg-slate-100 disabled:opacity-30"
-                    disabled={page === 1}
-                    onClick={() => setPage((current) => Math.max(1, current - 1))}
-                    type="button"
-                  >
-                    <ChevronLeft className="h-3.5 w-3.5" />
-                  </button>
-                  {paginationItems(page, totalPages).map((item) => (
-                    typeof item === 'number'
-                      ? (
+                    <th className="px-4 py-3 font-mono text-[11px] font-medium text-slate-800" scope="row">
+                      {record.reference}
+                    </th>
+                    <td className="px-4 py-3">
+                      <p className="font-medium text-slate-800">{record.name}</p>
+                      <p className="text-[11px] text-slate-500">{record.email}</p>
+                    </td>
+                    <td className="max-w-[160px] px-4 py-3 text-[11px] text-slate-600">
+                      <p className="truncate">{record.service || '—'}</p>
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-3 text-[11px] text-slate-500">
+                      {formatDay(record.preferredDate)}
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className={`rounded-sm px-2 py-1 text-[10px] font-medium ${appointmentStatusStyles[record.status]}`}>
+                        {appointmentStatusLabels[record.status]}
+                      </span>
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-3 text-[11px] text-slate-500">
+                      {formatDate(record.createdAt)}
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex justify-end gap-1">
                         <button
-                          aria-current={item === page ? 'page' : undefined}
-                          className={`inline-flex h-8 min-w-8 items-center justify-center rounded-md px-2 text-xs font-semibold ${item === page ? 'bg-blue-500 text-white' : 'text-slate-900 hover:bg-slate-100'}`}
-                          key={item}
-                          onClick={() => setPage(item)}
+                          aria-label={`Delete ${record.reference}`}
+                          className="rounded p-1.5 text-red-500 hover:bg-red-50"
+                          onClick={(event) => {
+                            event.stopPropagation()
+                            void remove(record)
+                          }}
+                          title="Delete"
                           type="button"
                         >
-                          {item}
+                          <Trash2 className="h-4 w-4" />
                         </button>
-                      )
-                      : <span className="inline-flex h-8 min-w-6 items-center justify-center text-xs text-slate-500" key={item}>…</span>
-                  ))}
-                  <button
-                    aria-label="Next page"
-                    className="inline-flex h-8 w-8 items-center justify-center rounded-md text-slate-500 hover:bg-slate-100 disabled:opacity-30"
-                    disabled={page === totalPages}
-                    onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
-                    type="button"
-                  >
-                    <ChevronRight className="h-3.5 w-3.5" />
-                  </button>
-                </nav>
-              </div>
-            </Card>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
-
-          <aside>
-            {!selected && (
-              <Card className="flex min-h-[320px] flex-col items-center justify-center border-[#dfe3e8] p-6 text-center shadow-none">
-                <CalendarClock className="mb-3 h-8 w-8 text-slate-300" />
-                <p className="text-sm font-medium text-slate-700">Select an appointment</p>
-                <p className="mt-1 max-w-[220px] text-[11px] text-slate-500">
-                  Open a website submission to review details, update status, and add notes.
-                </p>
-              </Card>
-            )}
-
-            {selected && (
-              <Card className="border-[#dfe3e8] p-4 shadow-none">
-                <div className="mb-3 flex items-start justify-between gap-2">
-                  <div>
-                    <p className="font-mono text-[11px] font-semibold text-slate-500">{selected.reference}</p>
-                    <h2 className="mt-1 text-base font-semibold text-slate-900">{selected.name}</h2>
-                    <p className="text-[11px] text-slate-500">{selected.email}{selected.phone ? ` · ${selected.phone}` : ''}</p>
-                  </div>
-                  <button
-                    aria-label="Close details"
-                    className="rounded p-1 text-slate-400 hover:bg-slate-100"
-                    onClick={() => setSelected(null)}
-                    type="button"
-                  >
-                    <X className="h-4 w-4" />
-                  </button>
-                </div>
-
-                <dl className="mb-4 grid grid-cols-2 gap-2 text-[11px]">
-                  {[
-                    ['Service', selected.service || '—'],
-                    ['Destination', selected.destination || '—'],
-                    ['Country', selected.country || '—'],
-                    ['Role', selected.role || '—'],
-                    ['Preferred', formatDay(selected.preferredDate)],
-                    ['Source', selected.source],
-                  ].map(([label, value]) => (
-                    <div className="rounded-md bg-slate-50 px-2.5 py-2" key={label}>
-                      <dt className="text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-400">{label}</dt>
-                      <dd className="mt-0.5 font-medium text-slate-700">{value}</dd>
-                    </div>
-                  ))}
-                </dl>
-
-                {selected.message && (
-                  <div className="mb-4 rounded-md border border-slate-100 bg-white px-3 py-2">
-                    <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-400">Message</p>
-                    <p className="mt-1 whitespace-pre-wrap text-xs leading-5 text-slate-700">{selected.message}</p>
-                  </div>
-                )}
-
-                <label className="mb-2.5 block text-[11px] font-medium text-slate-600">
-                  Status
-                  <select
-                    className="mt-1 h-9 w-full rounded-md border border-slate-200 bg-white px-3 text-xs outline-none focus:border-blue-500"
-                    onChange={(event) => setDetailStatus(event.target.value as AppointmentStatus)}
-                    value={detailStatus}
-                  >
-                    {(Object.keys(appointmentStatusLabels) as AppointmentStatus[]).map((key) => (
-                      <option key={key} value={key}>{appointmentStatusLabels[key]}</option>
-                    ))}
-                  </select>
-                </label>
-
-                <label className="mb-3 block text-[11px] font-medium text-slate-600">
-                  Internal notes
-                  <textarea
-                    className="mt-1 min-h-24 w-full rounded-md border border-slate-200 px-3 py-2 text-xs outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-                    onChange={(event) => setDetailNotes(event.target.value)}
-                    placeholder="Call notes, follow-ups, coordinator comments..."
-                    value={detailNotes}
-                  />
-                </label>
-
-                <button
-                  className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-lg bg-emerald-600 text-xs font-semibold text-white hover:bg-emerald-700 disabled:opacity-60"
-                  disabled={saving}
-                  onClick={() => void saveDetail()}
-                  type="button"
-                >
-                  {saving ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
-                  Save updates
-                </button>
-              </Card>
-            )}
-          </aside>
-        </div>
+          <div className="flex items-center justify-between border-t border-[#dfe3e8] px-4 py-3">
+            <label className="flex items-center gap-2 text-[11px] font-medium text-[#475467]">
+              <select
+                className="h-8 rounded-md border border-[#dfe3e8] bg-white px-2.5"
+                onChange={(event) => {
+                  setPageSize(Number(event.target.value))
+                  setPage(1)
+                }}
+                value={pageSize}
+              >
+                <option value={10}>10</option>
+                <option value={20}>20</option>
+                <option value={50}>50</option>
+              </select>
+              Entries Per Page
+            </label>
+            <nav aria-label="Appointments pagination" className="flex items-center gap-1">
+              <button
+                aria-label="Previous page"
+                className="inline-flex h-8 w-8 items-center justify-center rounded-md text-slate-500 hover:bg-slate-100 disabled:opacity-30"
+                disabled={page === 1}
+                onClick={() => setPage((current) => Math.max(1, current - 1))}
+                type="button"
+              >
+                <ChevronLeft className="h-3.5 w-3.5" />
+              </button>
+              {paginationItems(page, totalPages).map((item) => (
+                typeof item === 'number'
+                  ? (
+                    <button
+                      aria-current={item === page ? 'page' : undefined}
+                      className={`inline-flex h-8 min-w-8 items-center justify-center rounded-md px-2 text-xs font-semibold ${item === page ? 'bg-blue-500 text-white' : 'text-slate-900 hover:bg-slate-100'}`}
+                      key={item}
+                      onClick={() => setPage(item)}
+                      type="button"
+                    >
+                      {item}
+                    </button>
+                  )
+                  : <span className="inline-flex h-8 min-w-6 items-center justify-center text-xs text-slate-500" key={item}>…</span>
+              ))}
+              <button
+                aria-label="Next page"
+                className="inline-flex h-8 w-8 items-center justify-center rounded-md text-slate-500 hover:bg-slate-100 disabled:opacity-30"
+                disabled={page === totalPages}
+                onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
+                type="button"
+              >
+                <ChevronRight className="h-3.5 w-3.5" />
+              </button>
+            </nav>
+          </div>
+        </Card>
       </div>
+
+      {selected && (
+        <AppointmentDetailModal
+          appointment={selected}
+          onClose={() => setSelected(null)}
+          onSaved={(record) => {
+            setSelected(record)
+            refresh()
+          }}
+        />
+      )}
     </main>
   )
 }
