@@ -145,7 +145,6 @@ export function ConfirmModal({
   )
 }
 
-/** Delete-toned confirm dialog (same shell as ConfirmModal). */
 export function ConfirmDeleteModal({
   title = 'Delete this item?',
   description = 'This action cannot be undone.',
