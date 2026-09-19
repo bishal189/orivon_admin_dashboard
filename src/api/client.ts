@@ -277,7 +277,15 @@ export const emptyReference = (): ContentReference => ({
   accessedAt: '',
 })
 
-export function normalizeReferences(raw?: Array<Partial<ContentReference>> | null): ContentReference[] {
+export function normalizeReferences(
+  raw?: Array<{
+    id?: string
+    label?: string
+    url?: string
+    source?: string | null
+    accessedAt?: string | null
+  }> | null,
+): ContentReference[] {
   if (!Array.isArray(raw)) return []
   return raw
     .map((entry) => ({
