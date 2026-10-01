@@ -4,7 +4,7 @@ import { ToastContainer, toast } from 'react-toastify'
 import { api, type AuthUser } from './api/client'
 import { AppShell } from './components/layout/AppShell'
 import { AppointmentsPage } from './pages/AppointmentsPage'
-import { ContentPage, AuditLogsPage, HreflangPage, IndexingPage, RedirectsPage, RobotsTxtPage, SitemapPage, TrafficConversionsPage, UrlPolicyPage } from './pages/admin'
+import { ContentPage, AuditLogsPage, HreflangPage, IndexingPage, MemberBooksPage, RedirectsPage, RobotsTxtPage, SitemapPage, TrafficConversionsPage, UrlPolicyPage } from './pages/admin'
 import { DashboardPage } from './pages/DashboardPage'
 import { LoginPage } from './pages/LoginPage'
 import { NotFoundMonitorPage } from './pages/NotFoundMonitorPage'
@@ -13,6 +13,7 @@ import { SettingsPage } from './pages/SettingsPage'
 const routePaths: Record<string, string> = {
   dashboard: '/',
   appointments: '/appointments',
+  'member-books': '/member-books',
   content: '/pages',
   services: '/services',
   conditions: '/conditions',
@@ -101,6 +102,7 @@ function App() {
   const page = (() => {
     switch (route) {
       case 'appointments': return <AppointmentsPage />
+      case 'member-books': return <MemberBooksPage />
       case 'content': return <ContentPage contentType="PAGE" />
       case 'services': return <ContentPage contentType="SERVICE" />
       case 'conditions': return <ContentPage contentType="CONDITION" />

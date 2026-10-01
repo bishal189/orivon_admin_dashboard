@@ -6,6 +6,7 @@ import {
   CircleHelp,
   FileText,
   Languages,
+  LibraryBig,
   Link2,
   MapPin,
   Network,
@@ -56,6 +57,7 @@ export const navigation: NavigationSection[] = [
     label: 'Operations',
     items: [
       { label: 'Appointments', icon: CalendarClock, route: 'appointments' },
+      { label: 'Member Books', icon: LibraryBig, route: 'member-books' },
     ],
   },
   {

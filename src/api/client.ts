@@ -808,6 +808,35 @@ export interface NotFoundRecord {
   resolvedAt?: string | null
 }
 
+export interface MemberBook {
+  id: string
+  slug: string
+  title: string
+  description: string | null
+  coverImageUrl: string | null
+  pages: number | null
+  topics: string[]
+  published: boolean
+  sortOrder: number
+  hasPdf: boolean
+  pdfFilename: string | null
+  pdfSize: number | null
+  createdAt: string
+  updatedAt: string
+}
+
+export interface MemberBookInput {
+  title: string
+  slug?: string
+  description?: string | null
+  coverImageUrl?: string | null
+  pages?: number | null
+  topics?: string[]
+  published?: boolean
+  sortOrder?: number
+  password?: string
+}
+
 export type {
   AppointmentInput,
   AppointmentRecord,
@@ -1225,6 +1254,65 @@ class ApiClient {
     anchor.download = filename
     anchor.click()
     URL.revokeObjectURL(url)
+  }
+
+  private async uploadFile<T>(path: string, file: File, retry = true): Promise<ApiEnvelope<T>> {
+    const form = new FormData()
+    form.append('file', file)
+    const response = await fetch(`${this.baseUrl}${path}`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: {
+        Accept: 'application/json',
+        ...(this.accessToken ? { Authorization: `Bearer ${this.accessToken}` } : {}),
+      },
+      body: form,
+    })
+    if (response.status === 401 && retry) {
+      const token = await this.refreshAccessToken()
+      if (token) return this.uploadFile<T>(path, file, false)
+      this.unauthorizedHandler?.()
+    }
+    const body = await response.json().catch(() => null) as ApiEnvelope<T> | null
+    if (!response.ok || !body?.success) {
+      throw new ApiError(body?.message || `Upload failed (${response.status})`, response.status, body?.errors)
+    }
+    return body
+  }
+
+  async getMemberBooks() {
+    const { data } = await this.request<MemberBook[]>('/member-books')
+    return data
+  }
+
+  async createMemberBook(input: MemberBookInput) {
+    const { data, message } = await this.request<MemberBook>('/member-books', { method: 'POST', body: input })
+    return { book: data, message }
+  }
+
+  async updateMemberBook(id: string, input: Partial<MemberBookInput>) {
+    const { data, message } = await this.request<MemberBook>(`/member-books/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      body: input,
+    })
+    return { book: data, message }
+  }
+
+  async deleteMemberBook(id: string) {
+    const { message } = await this.request<null>(`/member-books/${encodeURIComponent(id)}`, { method: 'DELETE' })
+    return message
+  }
+
+  async uploadMemberBookPdf(id: string, file: File) {
+    const { data, message } = await this.uploadFile<MemberBook>(`/member-books/${encodeURIComponent(id)}/file`, file)
+    return { book: data, message }
+  }
+
+  async removeMemberBookPdf(id: string) {
+    const { data, message } = await this.request<MemberBook>(`/member-books/${encodeURIComponent(id)}/file`, {
+      method: 'DELETE',
+    })
+    return { book: data, message }
   }
 
   async exportRedirectsCsv() {
