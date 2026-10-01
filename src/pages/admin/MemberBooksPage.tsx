@@ -139,10 +139,21 @@ export function MemberBooksPage() {
       let { book } = editing
         ? await api.updateMemberBook(editing.id, payload)
         : await api.createMemberBook(payload)
-      if (pdf) {
-        book = (await api.uploadMemberBookPdf(book.id, pdf)).book
-      }
       upsertBook(book)
+      if (pdf) {
+        try {
+          book = (await api.uploadMemberBookPdf(book.id, pdf)).book
+          upsertBook(book)
+        } catch (uploadError) {
+          setEditing(book)
+          setForm((current) => ({ ...current, slug: book.slug, password: '' }))
+          const reason = uploadError instanceof Error ? uploadError.message : 'Upload failed'
+          const message = `Book details saved, but the PDF was not uploaded: ${reason}`
+          setError(message)
+          toast.error(message)
+          return
+        }
+      }
       toast.success(editing ? 'Book updated' : 'Book created')
       resetForm()
     } catch (requestError) {

@@ -1273,6 +1273,9 @@ class ApiClient {
       if (token) return this.uploadFile<T>(path, file, false)
       this.unauthorizedHandler?.()
     }
+    if (response.status === 413) {
+      throw new ApiError('The file is larger than the server allows. Increase the upload limit (client_max_body_size) on the server.', 413)
+    }
     const body = await response.json().catch(() => null) as ApiEnvelope<T> | null
     if (!response.ok || !body?.success) {
       throw new ApiError(body?.message || `Upload failed (${response.status})`, response.status, body?.errors)
