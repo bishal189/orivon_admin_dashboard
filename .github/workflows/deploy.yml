@@ -1,7 +1,8 @@
 # Build the Orivon admin dashboard, push to GHCR, and deploy on each push to master.
 # Images: ghcr.io/<owner>/orivon_admin_dashboard:latest and :<git-sha>
 # Repo secrets: DEPLOY_HOST, DEPLOY_USER, DEPLOY_SSH_PRIVATE_KEY
-# Optional repo variables: VITE_API_BASE_URL (default /api), DEPLOY_PATH (default /home/ubuntu/orivon_admin_dashboard)
+# Optional repo variable: DEPLOY_PATH (default /home/ubuntu/orivon_admin_dashboard)
+# API URL is read at container start: set VITE_API_BASE_URL in <DEPLOY_PATH>/.env on the server (default /api)
 
 name: Deploy Orivon Admin
 
@@ -47,8 +48,6 @@ jobs:
         with:
           context: .
           push: true
-          build-args: |
-            VITE_API_BASE_URL=${{ vars.VITE_API_BASE_URL || '/api' }}
           tags: |
             ${{ env.IMAGE }}:latest
             ${{ env.IMAGE }}:${{ github.sha }}
