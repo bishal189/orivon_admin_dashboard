@@ -1,15 +1,18 @@
-import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import { toast } from 'react-toastify'
-import { Eye, EyeOff, FileText, LoaderCircle, Lock, Pencil, Plus, Trash2, Upload, X } from 'lucide-react'
-import { API_BASE_URL, api, type MemberBook } from '../../api/client'
+import { Eye, EyeOff, FileText, ImagePlus, Link2, LoaderCircle, Lock, Pencil, Plus, Trash2, Upload, X } from 'lucide-react'
+import { API_BASE_URL, api, memberBookCoverSrc, type MemberBook } from '../../api/client'
 import { Card, StatusBadge } from '../../components/ui'
 import { ConfirmDeleteModal } from '../../components/ConfirmDeleteModal'
 import { fieldInputClass, FieldError, inputClass, isHttpUrl, Notice, Page, primaryButton, secondaryButton, SLUG_PATTERN } from './shared'
+
+type CoverMode = 'upload' | 'url'
 
 type FormState = {
   title: string
   slug: string
   description: string
+  coverMode: CoverMode
   coverImageUrl: string
   pages: string
   topics: string
@@ -22,6 +25,7 @@ const emptyForm = (): FormState => ({
   title: '',
   slug: '',
   description: '',
+  coverMode: 'upload',
   coverImageUrl: '',
   pages: '',
   topics: '',
@@ -34,6 +38,7 @@ const toForm = (book: MemberBook): FormState => ({
   title: book.title,
   slug: book.slug,
   description: book.description || '',
+  coverMode: book.coverImageUrl && !book.hasUploadedCover ? 'url' : 'upload',
   coverImageUrl: book.coverImageUrl || '',
   pages: book.pages ? String(book.pages) : '',
   topics: book.topics.join(', '),
@@ -49,6 +54,8 @@ const formatSize = (bytes: number | null) => {
 }
 
 const MAX_PDF_BYTES = 50 * 1024 * 1024
+const MAX_COVER_BYTES = 5 * 1024 * 1024
+const COVER_TYPES = ['image/jpeg', 'image/png', 'image/webp']
 
 export function MemberBooksPage() {
   const [books, setBooks] = useState<MemberBook[]>([])
@@ -57,11 +64,19 @@ export function MemberBooksPage() {
   const [editing, setEditing] = useState<MemberBook | null>(null)
   const [form, setForm] = useState<FormState>(emptyForm)
   const [pdf, setPdf] = useState<File | null>(null)
+  const [coverFile, setCoverFile] = useState<File | null>(null)
+  const [removeCover, setRemoveCover] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
   const [attempted, setAttempted] = useState(false)
   const [saving, setSaving] = useState(false)
   const [pendingDelete, setPendingDelete] = useState<MemberBook | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
+  const coverRef = useRef<HTMLInputElement>(null)
+
+  const coverFileUrl = useMemo(() => (coverFile ? URL.createObjectURL(coverFile) : ''), [coverFile])
+  useEffect(() => () => {
+    if (coverFileUrl) URL.revokeObjectURL(coverFileUrl)
+  }, [coverFileUrl])
 
   useEffect(() => {
     void api.getMemberBooks()
@@ -71,10 +86,19 @@ export function MemberBooksPage() {
   }, [])
 
   const isEditing = Boolean(editing)
+  const keepsUploadedCover = Boolean(editing?.hasUploadedCover) && !removeCover
+  const coverPreview = form.coverMode === 'upload'
+    ? coverFileUrl || (keepsUploadedCover && editing ? memberBookCoverSrc(editing) : '')
+    : form.coverImageUrl.trim() && isHttpUrl(form.coverImageUrl) ? form.coverImageUrl.trim() : ''
   const fieldErrors = {
     title: form.title.trim() ? '' : 'Enter a title.',
     slug: form.slug.trim() && !SLUG_PATTERN.test(form.slug.trim()) ? 'Use lowercase letters, numbers and hyphens.' : '',
-    coverImageUrl: isHttpUrl(form.coverImageUrl) ? '' : 'Use a full http(s) URL.',
+    coverImageUrl: form.coverMode === 'url' && !isHttpUrl(form.coverImageUrl) ? 'Use a full http(s) URL.' : '',
+    cover: !coverFile || form.coverMode !== 'upload'
+      ? ''
+      : !COVER_TYPES.includes(coverFile.type)
+        ? 'Use a JPG, PNG or WebP image.'
+        : coverFile.size > MAX_COVER_BYTES ? 'Image must be 5 MB or smaller.' : '',
     pages: form.pages.trim() && !(Number(form.pages) >= 1) ? 'Enter a positive number.' : '',
     password: !isEditing && form.password.length < 4
       ? 'Set a password of at least 4 characters.'
@@ -88,22 +112,37 @@ export function MemberBooksPage() {
   const set = <K extends keyof FormState>(key: K, value: FormState[K]) =>
     setForm((current) => ({ ...current, [key]: value }))
 
+  const clearFiles = () => {
+    setPdf(null)
+    setCoverFile(null)
+    setRemoveCover(false)
+    if (fileRef.current) fileRef.current.value = ''
+    if (coverRef.current) coverRef.current.value = ''
+  }
+
   const resetForm = () => {
     setEditing(null)
     setForm(emptyForm())
-    setPdf(null)
+    clearFiles()
     setAttempted(false)
     setShowPassword(false)
-    if (fileRef.current) fileRef.current.value = ''
   }
 
   const startEdit = (book: MemberBook) => {
     setEditing(book)
     setForm(toForm(book))
-    setPdf(null)
+    clearFiles()
     setAttempted(false)
-    if (fileRef.current) fileRef.current.value = ''
     window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
+  const clearCoverPhoto = () => {
+    if (coverFile) {
+      setCoverFile(null)
+      if (coverRef.current) coverRef.current.value = ''
+    } else {
+      setRemoveCover(true)
+    }
   }
 
   const upsertBook = (book: MemberBook) =>
@@ -125,7 +164,7 @@ export function MemberBooksPage() {
       title: form.title.trim(),
       ...(form.slug.trim() ? { slug: form.slug.trim() } : {}),
       description: form.description.trim() || null,
-      coverImageUrl: form.coverImageUrl.trim() || null,
+      coverImageUrl: form.coverMode === 'url' ? form.coverImageUrl.trim() || null : null,
       pages: form.pages.trim() ? Number(form.pages) : null,
       topics: form.topics.split(',').map((topic) => topic.trim()).filter(Boolean),
       sortOrder: Number(form.sortOrder) || 0,
@@ -140,15 +179,29 @@ export function MemberBooksPage() {
         ? await api.updateMemberBook(editing.id, payload)
         : await api.createMemberBook(payload)
       upsertBook(book)
+
+      const dropsUploadedCover = form.coverMode === 'upload' ? removeCover : !form.coverImageUrl.trim()
+      const steps: Array<{ label: string; run: (id: string) => Promise<{ book: MemberBook }>; done: () => void }> = []
+      if (form.coverMode === 'upload' && coverFile) {
+        steps.push({ label: 'cover photo', run: (id) => api.uploadMemberBookCover(id, coverFile), done: () => setCoverFile(null) })
+      } else if (book.hasUploadedCover && dropsUploadedCover) {
+        steps.push({ label: 'cover photo', run: (id) => api.removeMemberBookCover(id), done: () => setRemoveCover(false) })
+      }
       if (pdf) {
+        steps.push({ label: 'PDF', run: (id) => api.uploadMemberBookPdf(id, pdf), done: () => setPdf(null) })
+      }
+
+      for (const step of steps) {
         try {
-          book = (await api.uploadMemberBookPdf(book.id, pdf)).book
+          book = (await step.run(book.id)).book
           upsertBook(book)
+          step.done()
         } catch (uploadError) {
-          setEditing(book)
-          setForm((current) => ({ ...current, slug: book.slug, password: '' }))
+          const saved = book
+          setEditing(saved)
+          setForm((current) => ({ ...current, slug: saved.slug, password: '' }))
           const reason = uploadError instanceof Error ? uploadError.message : 'Upload failed'
-          const message = `Book details saved, but the PDF was not uploaded: ${reason}`
+          const message = `Book details saved, but the ${step.label} was not saved: ${reason}`
           setError(message)
           toast.error(message)
           return
@@ -247,17 +300,75 @@ export function MemberBooksPage() {
                 value={form.description}
               />
             </label>
-            <label className="block text-xs font-medium text-slate-700">
-              Cover image URL
-              <input
-                aria-invalid={showError('coverImageUrl')}
-                className={fieldInputClass(showError('coverImageUrl'))}
-                onChange={(event) => set('coverImageUrl', event.target.value)}
-                placeholder="https://…"
-                value={form.coverImageUrl}
-              />
-              {showError('coverImageUrl') && <FieldError message={fieldErrors.coverImageUrl} />}
-            </label>
+            <div className="text-xs font-medium text-slate-700">
+              Cover image <span className="font-normal text-slate-400">(optional)</span>
+              <div className="mt-1.5 grid grid-cols-2 gap-1 rounded-lg bg-slate-100 p-1" role="tablist">
+                {([
+                  { mode: 'upload', label: 'Upload photo', Icon: ImagePlus },
+                  { mode: 'url', label: 'Image URL', Icon: Link2 },
+                ] as const).map(({ mode, label, Icon }) => (
+                  <button
+                    aria-selected={form.coverMode === mode}
+                    className={`inline-flex items-center justify-center gap-1.5 rounded-md py-1.5 text-[11px] font-semibold transition ${form.coverMode === mode ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                    key={mode}
+                    onClick={() => set('coverMode', mode)}
+                    role="tab"
+                    type="button"
+                  >
+                    <Icon className="h-3.5 w-3.5" />
+                    {label}
+                  </button>
+                ))}
+              </div>
+
+              {coverPreview && (
+                <div className="relative mt-2 aspect-[16/10] overflow-hidden rounded-lg border border-slate-200 bg-slate-50">
+                  <img alt="Cover preview" className="h-full w-full object-cover" src={coverPreview} />
+                  {form.coverMode === 'upload' && (
+                    <button
+                      aria-label="Remove cover photo"
+                      className="absolute top-2 right-2 rounded-full bg-white/95 p-1.5 text-slate-600 shadow-sm hover:text-red-600"
+                      onClick={clearCoverPhoto}
+                      type="button"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                </div>
+              )}
+
+              {form.coverMode === 'upload' ? (
+                <>
+                  <button className={`${secondaryButton} mt-2 w-full`} onClick={() => coverRef.current?.click()} type="button">
+                    <Upload className="h-3.5 w-3.5" />
+                    {coverFile ? coverFile.name : keepsUploadedCover ? 'Replace photo' : 'Choose photo'}
+                  </button>
+                  <input
+                    accept="image/jpeg,image/png,image/webp"
+                    className="hidden"
+                    onChange={(event) => {
+                      setCoverFile(event.target.files?.[0] ?? null)
+                      setRemoveCover(false)
+                    }}
+                    ref={coverRef}
+                    type="file"
+                  />
+                  {showError('cover') && <FieldError message={fieldErrors.cover} />}
+                  <p className="mt-1 text-[10px] font-normal text-slate-400">JPG, PNG or WebP, up to 5 MB.</p>
+                </>
+              ) : (
+                <>
+                  <input
+                    aria-invalid={showError('coverImageUrl')}
+                    className={fieldInputClass(showError('coverImageUrl'))}
+                    onChange={(event) => set('coverImageUrl', event.target.value)}
+                    placeholder="https://…"
+                    value={form.coverImageUrl}
+                  />
+                  {showError('coverImageUrl') && <FieldError message={fieldErrors.coverImageUrl} />}
+                </>
+              )}
+            </div>
             <div className="grid grid-cols-2 gap-3">
               <label className="block text-xs font-medium text-slate-700">
                 Pages
@@ -368,8 +479,8 @@ export function MemberBooksPage() {
             {books.map((book) => (
               <div className={`flex items-center gap-4 p-4 ${editing?.id === book.id ? 'bg-brand-50/40' : ''}`} key={book.id}>
                 <div className="h-14 w-20 shrink-0 overflow-hidden rounded-md bg-slate-100">
-                  {book.coverImageUrl
-                    ? <img alt="" className="h-full w-full object-cover" src={book.coverImageUrl} />
+                  {memberBookCoverSrc(book)
+                    ? <img alt="" className="h-full w-full object-cover" src={memberBookCoverSrc(book) ?? undefined} />
                     : <div className="flex h-full w-full items-center justify-center text-slate-300"><Lock className="h-5 w-5" /></div>}
                 </div>
                 <div className="min-w-0 flex-1">

@@ -814,6 +814,7 @@ export interface MemberBook {
   title: string
   description: string | null
   coverImageUrl: string | null
+  hasUploadedCover: boolean
   pages: number | null
   topics: string[]
   published: boolean
@@ -824,6 +825,11 @@ export interface MemberBook {
   createdAt: string
   updatedAt: string
 }
+
+export const memberBookCoverSrc = (book: MemberBook) =>
+  book.hasUploadedCover
+    ? `${API_BASE_URL}/public/member-books/${encodeURIComponent(book.slug)}/cover?v=${encodeURIComponent(book.updatedAt)}`
+    : book.coverImageUrl
 
 export interface MemberBookInput {
   title: string
@@ -1313,6 +1319,18 @@ class ApiClient {
 
   async removeMemberBookPdf(id: string) {
     const { data, message } = await this.request<MemberBook>(`/member-books/${encodeURIComponent(id)}/file`, {
+      method: 'DELETE',
+    })
+    return { book: data, message }
+  }
+
+  async uploadMemberBookCover(id: string, file: File) {
+    const { data, message } = await this.uploadFile<MemberBook>(`/member-books/${encodeURIComponent(id)}/cover`, file)
+    return { book: data, message }
+  }
+
+  async removeMemberBookCover(id: string) {
+    const { data, message } = await this.request<MemberBook>(`/member-books/${encodeURIComponent(id)}/cover`, {
       method: 'DELETE',
     })
     return { book: data, message }
