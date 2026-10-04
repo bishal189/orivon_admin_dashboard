@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react'
-import { KeyRound, LoaderCircle, Save, ShieldCheck, UserRound } from 'lucide-react'
+import { Eye, EyeOff, LoaderCircle, Lock, Mail, Save, ShieldCheck, UserRound } from 'lucide-react'
 import { toast } from 'react-toastify'
 import { api, ApiError, type AuthUser } from '../api/client'
 import { Card } from '../components/ui'
@@ -25,7 +25,7 @@ export function SettingsPage({
   const [name, setName] = useState(user.name)
   const [email, setEmail] = useState(user.email)
   const [profilePassword, setProfilePassword] = useState('')
-  const [currentPassword, setCurrentPassword] = useState('')
+  const [passwordEmail, setPasswordEmail] = useState(user.email)
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [savingProfile, setSavingProfile] = useState(false)
@@ -37,11 +37,14 @@ export function SettingsPage({
   const [savingTotp, setSavingTotp] = useState(false)
   const [profileAttempted, setProfileAttempted] = useState(false)
   const [passwordAttempted, setPasswordAttempted] = useState(false)
+  const [showPassword, setShowPassword] = useState(false)
+  const [showConfirm, setShowConfirm] = useState(false)
   const [totpAttempted, setTotpAttempted] = useState(false)
 
   useEffect(() => {
     setName(user.name)
     setEmail(user.email)
+    setPasswordEmail(user.email)
     setTotpEnabled(Boolean(user.totpEnabled))
   }, [user])
 
@@ -59,9 +62,13 @@ export function SettingsPage({
       : '',
   }
   const passwordErrors = {
-    currentPassword: !currentPassword ? 'Enter your current password.' : '',
+    passwordEmail: !passwordEmail.trim()
+      ? 'Enter an email address.'
+      : !EMAIL_PATTERN.test(passwordEmail.trim())
+        ? 'Enter a valid email address.'
+        : '',
     newPassword: !newPassword
-      ? 'Enter a new password.'
+      ? 'Enter a password.'
       : newPassword.length < 10
         ? 'Password must contain at least 10 characters.'
         : '',
@@ -110,12 +117,13 @@ export function SettingsPage({
     setSavingPassword(true)
     try {
       toast.success(await api.changePassword({
-        currentPassword,
-        newPassword,
+        email: passwordEmail.trim(),
+        password: newPassword,
       }))
-      setCurrentPassword('')
       setNewPassword('')
       setConfirmPassword('')
+      setShowPassword(false)
+      setShowConfirm(false)
       setPasswordAttempted(false)
     } catch (requestError) {
       toast.error(requestError instanceof ApiError || requestError instanceof Error
@@ -179,7 +187,7 @@ export function SettingsPage({
   }
 
   const showProfile = (key: keyof typeof profileErrors) => profileAttempted && Boolean(profileErrors[key])
-  const showPassword = (key: keyof typeof passwordErrors) => passwordAttempted && Boolean(passwordErrors[key])
+  const showPasswordError = (key: keyof typeof passwordErrors) => passwordAttempted && Boolean(passwordErrors[key])
   const showDisableTotp = (key: keyof typeof disableTotpErrors) => totpAttempted && Boolean(disableTotpErrors[key])
 
   return (
@@ -265,72 +273,98 @@ export function SettingsPage({
         </form>
 
         <form className="mt-4" noValidate onSubmit={savePassword}>
-          <Card className="overflow-hidden border-[#dfe3e8] shadow-none">
-            <div className="border-b border-slate-100 px-5 py-4 sm:px-6">
-              <div className="flex items-start gap-3">
-                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-50 text-amber-700">
-                  <KeyRound className="h-5 w-5" />
-                </span>
-                <div>
-                  <h2 className="text-sm font-semibold text-slate-900">Password</h2>
-                  <p className="mt-0.5 text-xs text-slate-500">Use at least 10 characters for a new password.</p>
-                </div>
-              </div>
+          <Card className="overflow-hidden border-[#dfe3e8] px-5 py-8 shadow-none sm:px-8">
+            <div className="mx-auto max-w-md text-center">
+              <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-brand-50 text-brand-700">
+                <Lock className="h-6 w-6" />
+              </span>
+              <h2 className="mt-4 text-lg font-semibold text-slate-900">Change Password</h2>
+              <p className="mt-2 text-xs leading-relaxed text-slate-500">
+                Enter the account email and a password of at least 10 characters. Admins can update any account.
+              </p>
             </div>
 
-            <div className="grid gap-4 p-5 sm:p-6">
-              <label className="text-xs font-medium text-slate-700">
-                Current password
-                <input
-                  aria-describedby={showPassword('currentPassword') ? 'settings-current-password-error' : undefined}
-                  aria-invalid={showPassword('currentPassword')}
-                  autoComplete="current-password"
-                  className={fieldInputClass(showPassword('currentPassword'))}
-                  onChange={(event) => setCurrentPassword(event.target.value)}
-                  type="password"
-                  value={currentPassword}
-                />
-                {showPassword('currentPassword') && (
-                  <FieldError id="settings-current-password-error" message={passwordErrors.currentPassword} />
+            <div className="mx-auto mt-6 grid max-w-md gap-4">
+              <label className="text-sm font-medium text-slate-800">
+                Email
+                <span className="relative mt-1.5 block">
+                  <Mail className={`pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 ${showPasswordError('passwordEmail') ? 'text-red-500' : 'text-slate-400'}`} />
+                  <input
+                    aria-describedby={showPasswordError('passwordEmail') ? 'settings-password-email-error' : undefined}
+                    aria-invalid={showPasswordError('passwordEmail')}
+                    autoComplete="email"
+                    className={fieldInputClass(showPasswordError('passwordEmail'), 'mt-0 pl-10')}
+                    onChange={(event) => setPasswordEmail(event.target.value)}
+                    placeholder="admin@orivon.ae"
+                    type="email"
+                    value={passwordEmail}
+                  />
+                </span>
+                {showPasswordError('passwordEmail') && (
+                  <FieldError id="settings-password-email-error" message={passwordErrors.passwordEmail} />
                 )}
               </label>
-              <label className="text-xs font-medium text-slate-700">
-                New password
-                <input
-                  aria-describedby={showPassword('newPassword') ? 'settings-new-password-error' : undefined}
-                  aria-invalid={showPassword('newPassword')}
-                  autoComplete="new-password"
-                  className={fieldInputClass(showPassword('newPassword'))}
-                  onChange={(event) => setNewPassword(event.target.value)}
-                  type="password"
-                  value={newPassword}
-                />
-                {showPassword('newPassword') && (
+
+              <label className="text-sm font-medium text-slate-800">
+                Password
+                <span className="relative mt-1.5 block">
+                  <Lock className={`pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 ${showPasswordError('newPassword') ? 'text-red-500' : 'text-slate-400'}`} />
+                  <input
+                    aria-describedby={showPasswordError('newPassword') ? 'settings-new-password-error' : undefined}
+                    aria-invalid={showPasswordError('newPassword')}
+                    autoComplete="new-password"
+                    className={fieldInputClass(showPasswordError('newPassword'), 'mt-0 px-10')}
+                    onChange={(event) => setNewPassword(event.target.value)}
+                    placeholder="New password"
+                    type={showPassword ? 'text' : 'password'}
+                    value={newPassword}
+                  />
+                  <button
+                    aria-label={showPassword ? 'Hide password' : 'Show password'}
+                    className="absolute top-1/2 right-2 -translate-y-1/2 rounded p-1 text-slate-400 hover:text-slate-700"
+                    onClick={() => setShowPassword((current) => !current)}
+                    type="button"
+                  >
+                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </span>
+                {showPasswordError('newPassword') && (
                   <FieldError id="settings-new-password-error" message={passwordErrors.newPassword} />
                 )}
               </label>
-              <label className="text-xs font-medium text-slate-700">
-                Confirm new password
-                <input
-                  aria-describedby={showPassword('confirmPassword') ? 'settings-confirm-password-error' : undefined}
-                  aria-invalid={showPassword('confirmPassword')}
-                  autoComplete="new-password"
-                  className={fieldInputClass(showPassword('confirmPassword'))}
-                  onChange={(event) => setConfirmPassword(event.target.value)}
-                  type="password"
-                  value={confirmPassword}
-                />
-                {showPassword('confirmPassword') && (
+
+              <label className="text-sm font-medium text-slate-800">
+                Confirm password
+                <span className="relative mt-1.5 block">
+                  <Lock className={`pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 ${showPasswordError('confirmPassword') ? 'text-red-500' : 'text-slate-400'}`} />
+                  <input
+                    aria-describedby={showPasswordError('confirmPassword') ? 'settings-confirm-password-error' : undefined}
+                    aria-invalid={showPasswordError('confirmPassword')}
+                    autoComplete="new-password"
+                    className={fieldInputClass(showPasswordError('confirmPassword'), 'mt-0 px-10')}
+                    onChange={(event) => setConfirmPassword(event.target.value)}
+                    placeholder="Confirm password"
+                    type={showConfirm ? 'text' : 'password'}
+                    value={confirmPassword}
+                  />
+                  <button
+                    aria-label={showConfirm ? 'Hide confirmation' : 'Show confirmation'}
+                    className="absolute top-1/2 right-2 -translate-y-1/2 rounded p-1 text-slate-400 hover:text-slate-700"
+                    onClick={() => setShowConfirm((current) => !current)}
+                    type="button"
+                  >
+                    {showConfirm ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </span>
+                {showPasswordError('confirmPassword') && (
                   <FieldError id="settings-confirm-password-error" message={passwordErrors.confirmPassword} />
                 )}
               </label>
 
-              <div className="flex justify-end pt-1">
-                <button className={`${primaryButton} min-w-36`} disabled={savingPassword} type="submit">
-                  {savingPassword ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <KeyRound className="h-4 w-4" />}
-                  Update password
-                </button>
-              </div>
+              <button className={`${primaryButton} mt-2 w-full py-3 text-sm`} disabled={savingPassword} type="submit">
+                {savingPassword ? <LoaderCircle className="h-4 w-4 animate-spin" /> : null}
+                Change Password
+              </button>
             </div>
           </Card>
         </form>
@@ -387,14 +421,15 @@ export function SettingsPage({
             ) : null}
 
             {totpEnabled ? (
-              <form className="space-y-4" noValidate onSubmit={(event) => void disableTotp(event)}>
-                <label className="text-xs font-medium text-slate-700">
+              <form className="space-y-5" noValidate onSubmit={(event) => void disableTotp(event)}>
+                <label className="flex flex-col gap-2 text-xs font-medium text-slate-700">
                   Current password
                   <input
                     aria-describedby={showDisableTotp('totpPassword') ? 'settings-disable-password-error' : undefined}
                     aria-invalid={showDisableTotp('totpPassword')}
-                    className={fieldInputClass(showDisableTotp('totpPassword'))}
+                    className={fieldInputClass(showDisableTotp('totpPassword'), 'mt-0')}
                     onChange={(event) => setTotpPassword(event.target.value)}
+                    placeholder="Enter your current password"
                     type="password"
                     value={totpPassword}
                   />
@@ -402,14 +437,15 @@ export function SettingsPage({
                     <FieldError id="settings-disable-password-error" message={disableTotpErrors.totpPassword} />
                   )}
                 </label>
-                <label className="text-xs font-medium text-slate-700">
+                <label className="flex flex-col gap-2 text-xs font-medium text-slate-700">
                   Current 2FA code
                   <input
                     aria-describedby={showDisableTotp('totpCode') ? 'settings-disable-totp-error' : undefined}
                     aria-invalid={showDisableTotp('totpCode')}
-                    className={fieldInputClass(showDisableTotp('totpCode'))}
+                    className={fieldInputClass(showDisableTotp('totpCode'), 'mt-0')}
                     inputMode="numeric"
                     maxLength={6}
+                    placeholder="Enter your 2FA code"
                     onChange={(event) => setTotpCode(event.target.value.replace(/\D/g, ''))}
                     value={totpCode}
                   />
@@ -417,7 +453,7 @@ export function SettingsPage({
                     <FieldError id="settings-disable-totp-error" message={disableTotpErrors.totpCode} />
                   )}
                 </label>
-                <button className="inline-flex items-center justify-center gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-2.5 text-xs font-semibold text-red-700 hover:bg-red-100" disabled={savingTotp} type="submit">
+                <button className="mt-1 inline-flex items-center justify-center gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-2.5 text-xs font-semibold text-red-700 hover:bg-red-100" disabled={savingTotp} type="submit">
                   {savingTotp ? <LoaderCircle className="h-4 w-4 animate-spin" /> : null}
                   Disable 2FA
                 </button>

@@ -967,12 +967,12 @@ class ApiClient {
     return { user: data, message }
   }
 
-  async changePassword(input: { currentPassword: string; newPassword: string }) {
-    const { data, message } = await this.request<{ accessToken: string }>('/auth/change-password', {
+  async changePassword(input: { email: string; password: string }) {
+    const { data, message } = await this.request<{ accessToken: string | null }>('/auth/change-password', {
       method: 'POST',
       body: input,
     })
-    this.accessToken = data.accessToken
+    if (data.accessToken) this.accessToken = data.accessToken
     return message
   }
 
