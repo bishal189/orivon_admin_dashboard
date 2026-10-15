@@ -50,6 +50,7 @@ export function ContentPage({
   const metaImportRef = useRef<HTMLInputElement>(null)
   const typeLabel = contentTypeLabels[contentType]
   const typePlural = contentTypePlurals[contentType]
+  const isFaq = contentType === 'FAQ'
 
   useEffect(() => {
     setPage(1)
@@ -89,7 +90,7 @@ export function ContentPage({
   }, [contentType, page, pageSize, query, reloadKey, seoOnly, sortDirection, sortKey])
 
   const remove = async (record: ContentRecord) => {
-    const published = record.status === 'published'
+    const published = record.status === 'published' && !isFaq
     if (published) {
       const replacement = window.prompt(
         `“${record.title}” is published. Enter the closest relevant replacement path (not homepage unless intentional):\n\ne.g. /services/doctor-nurse-licensing`,
@@ -208,33 +209,41 @@ export function ContentPage({
           />
         </div>
       ) : (
-        <button className={primaryButton} onClick={() => setEditing('new')} type="button"><Plus className="h-4 w-4" />New {typeLabel.toLowerCase()}</button>
+        <button className={primaryButton} onClick={() => setEditing('new')} type="button"><Plus className="h-4 w-4" />{isFaq ? 'New question' : `New ${typeLabel.toLowerCase()}`}</button>
       )}
-      description={seoOnly ? 'Review and edit search titles, descriptions, canonicals and robots. Export URLs/metadata before migrations; import CSV for bulk SEO updates.' : `Create and manage ${typePlural.toLowerCase()} records with SEO title, meta description, slug, canonical, and index controls.`}
+      description={seoOnly ? 'Review and edit search titles, descriptions, canonicals and robots. Export URLs/metadata before migrations; import CSV for bulk SEO updates.' : isFaq ? 'Write a question and answer, then attach it to the page where it should open.' : `Create and manage ${typePlural.toLowerCase()} records with SEO title, meta description, slug, canonical, and index controls.`}
       title={seoOnly ? 'Titles & Meta' : typePlural}
     >
       {error && <Notice message={error} />}
       <div className="mb-3 flex items-center gap-3">
         <label className="relative block min-w-0 flex-1">
           <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
-          <input className="h-9 w-full rounded-md border border-slate-200 bg-white pl-9 pr-3 text-xs text-slate-700 outline-none placeholder:text-slate-400 focus:border-brand-500 focus:ring-2 focus:ring-brand-100" onChange={(event) => { setQuery(event.target.value); setPage(1) }} placeholder="Search by title or URL..." type="search" value={query} />
+          <input className="h-9 w-full rounded-md border border-slate-200 bg-white pl-9 pr-3 text-xs text-slate-700 outline-none placeholder:text-slate-400 focus:border-brand-500 focus:ring-2 focus:ring-brand-100" onChange={(event) => { setQuery(event.target.value); setPage(1) }} placeholder={isFaq ? 'Search questions…' : 'Search by title or URL...'} type="search" value={query} />
         </label>
         <p aria-live="polite" className="shrink-0 text-[11px] font-medium text-slate-400">{total} results</p>
       </div>
       <Card className="overflow-hidden rounded-md border-[#dfe3e8] bg-white shadow-none">
         <div aria-label={`${typePlural} content table`} className="max-h-[580px] overflow-auto focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-400" tabIndex={0}>
           <table className="w-full min-w-[900px] text-left text-xs text-[#344054]">
-            <caption className="sr-only">Manage {typePlural.toLowerCase()}, SEO directives, sitemap visibility and schema settings.</caption>
+            <caption className="sr-only">{isFaq ? 'Manage questions and answers.' : `Manage ${typePlural.toLowerCase()}, SEO directives, sitemap visibility and schema settings.`}</caption>
             <thead className="sticky top-0 z-[1] border-b border-[#dfe3e8] bg-[#f4f7fa] text-[11px] font-semibold text-[#667085]">
               <tr>
-                {([
-                  ['title', seoOnly ? 'Title' : typeLabel, 'title'],
-                  ['status', seoOnly ? 'Meta description' : 'Status', 'status'],
-                  ['robots', 'Robots', null],
-                  ['sitemap', 'Sitemap', null],
-                  ['schema', 'Schema', null],
-                  ['updatedAt', 'Updated', 'updatedAt'],
-                ] as const).map(([key, label, sortableKey]) => (
+                {(isFaq
+                  ? ([
+                    ['title', 'Question', 'title'],
+                    ['status', 'Answer', null],
+                    ['published', 'Published', 'status'],
+                    ['updatedAt', 'Updated', 'updatedAt'],
+                  ] as const)
+                  : ([
+                    ['title', seoOnly ? 'Title' : typeLabel, 'title'],
+                    ['status', seoOnly ? 'Meta description' : 'Status', 'status'],
+                    ['robots', 'Robots', null],
+                    ['sitemap', 'Sitemap', null],
+                    ['schema', 'Schema', null],
+                    ['updatedAt', 'Updated', 'updatedAt'],
+                  ] as const)
+                ).map(([key, label, sortableKey]) => (
                   <th aria-sort={sortableKey ? (sortKey === sortableKey ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none') : undefined} className="px-4 py-2 font-semibold" key={key} scope="col">
                     {sortableKey ? <button className="inline-flex items-center gap-1 hover:text-[#344054]" onClick={() => changeSort(sortableKey)} type="button">{label}<ChevronDown className={`h-2.5 w-2.5 transition ${sortKey === sortableKey ? `text-[#667085] ${sortDirection === 'asc' ? 'rotate-180' : ''}` : 'text-[#b5bdc9]'}`} /></button> : label}
                   </th>
@@ -243,33 +252,48 @@ export function ContentPage({
               </tr>
             </thead>
             <tbody className="divide-y divide-[#e4e7ec]">
-              {loading && <tr><td className="px-4 py-10 text-center text-slate-400" colSpan={7}><LoaderCircle className="mx-auto h-5 w-5 animate-spin" /></td></tr>}
-              {!loading && visible.length === 0 && <tr><td className="px-4 py-10 text-center text-slate-400" colSpan={7}>No content records found.</td></tr>}
+              {loading && <tr><td className="px-4 py-10 text-center text-slate-400" colSpan={isFaq ? 5 : 7}><LoaderCircle className="mx-auto h-5 w-5 animate-spin" /></td></tr>}
+              {!loading && visible.length === 0 && <tr><td className="px-4 py-10 text-center text-slate-400" colSpan={isFaq ? 5 : 7}>{isFaq ? 'No questions yet.' : 'No content records found.'}</td></tr>}
               {visible.map((record) => (
                 <tr className="group bg-white text-[#344054] transition-colors hover:bg-[#f8fafc]" key={record.id}>
                   <th className="px-4 py-2 font-normal" scope="row">
                     <div className="flex min-w-0 items-center gap-2">
                       <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#f1f4f7] text-[9px] font-semibold text-[#667085]">
-                        {record.title.trim().charAt(0).toUpperCase() || 'P'}
+                        {(record.h1 || record.title).trim().charAt(0).toUpperCase() || 'P'}
                       </span>
                       <div className="flex min-w-0 items-center gap-2">
-                        <p className="truncate font-semibold text-[#344054]">{record.title}</p>
-                        <p className="truncate text-[10px] font-normal text-[#98a2b3]">/{record.slug}</p>
+                        <p className="truncate font-semibold text-[#344054]">{isFaq ? (record.h1 || record.title) : record.title}</p>
+                        {isFaq ? null : <p className="truncate text-[10px] font-normal text-[#98a2b3]">/{record.slug}</p>}
                       </div>
                     </div>
                   </th>
-                  <td className="max-w-xs px-4 py-2">{seoOnly ? <p className="truncate">{record.description}</p> : <span className={`inline-flex rounded-sm px-1.5 py-0.5 text-[10px] font-medium ${
-                    record.status === 'published'
-                      ? 'bg-[#dcfce7] text-[#16a34a]'
-                      : record.status === 'medical_review'
-                        ? 'bg-[#fef3c7] text-[#b45309]'
-                        : record.status === 'editorial_review'
-                          ? 'bg-[#ede9fe] text-[#6d28d9]'
-                          : 'bg-[#e8f1ff] text-[#3b82f6]'
-                  }`}>{EDITORIAL_STATUS_LABELS[record.status || 'draft']}</span>}</td>
-                  <td className="px-4 py-2 font-mono text-[11px]">{record.robots}</td>
-                  <td className="px-4 py-2"><span className={`inline-flex rounded-sm px-1.5 py-0.5 text-[10px] font-medium ${record.sitemapExcluded ? 'bg-[#f2f4f7] text-[#667085]' : 'bg-[#dcfce7] text-[#16a34a]'}`}>{record.sitemapExcluded ? 'Excluded' : 'Included'}</span></td>
-                  <td className="px-4 py-2"><span className={`inline-flex rounded-sm px-1.5 py-0.5 text-[10px] font-medium ${record.schemaDisabled ? 'bg-[#f2f4f7] text-[#667085]' : 'bg-[#dcfce7] text-[#16a34a]'}`}>{record.schemaDisabled ? 'Disabled' : 'Enabled'}</span></td>
+                  {isFaq ? (
+                    <td className="max-w-md px-4 py-2">
+                      <p className="line-clamp-2 text-[11px] leading-relaxed text-slate-500">{record.intro || '—'}</p>
+                    </td>
+                  ) : null}
+                  {isFaq ? (
+                    <td className="px-4 py-2">
+                      <span className={`inline-flex rounded-sm px-1.5 py-0.5 text-[10px] font-medium ${record.status === 'published' ? 'bg-[#dcfce7] text-[#16a34a]' : 'bg-[#f2f4f7] text-[#667085]'}`}>
+                        {record.status === 'published' ? 'Yes' : 'No'}
+                      </span>
+                    </td>
+                  ) : (
+                    <>
+                      <td className="max-w-xs px-4 py-2">{seoOnly ? <p className="truncate">{record.description}</p> : <span className={`inline-flex rounded-sm px-1.5 py-0.5 text-[10px] font-medium ${
+                        record.status === 'published'
+                          ? 'bg-[#dcfce7] text-[#16a34a]'
+                          : record.status === 'medical_review'
+                            ? 'bg-[#fef3c7] text-[#b45309]'
+                            : record.status === 'editorial_review'
+                              ? 'bg-[#ede9fe] text-[#6d28d9]'
+                              : 'bg-[#e8f1ff] text-[#3b82f6]'
+                      }`}>{EDITORIAL_STATUS_LABELS[record.status || 'draft']}</span>}</td>
+                      <td className="px-4 py-2 font-mono text-[11px]">{record.robots}</td>
+                      <td className="px-4 py-2"><span className={`inline-flex rounded-sm px-1.5 py-0.5 text-[10px] font-medium ${record.sitemapExcluded ? 'bg-[#f2f4f7] text-[#667085]' : 'bg-[#dcfce7] text-[#16a34a]'}`}>{record.sitemapExcluded ? 'Excluded' : 'Included'}</span></td>
+                      <td className="px-4 py-2"><span className={`inline-flex rounded-sm px-1.5 py-0.5 text-[10px] font-medium ${record.schemaDisabled ? 'bg-[#f2f4f7] text-[#667085]' : 'bg-[#dcfce7] text-[#16a34a]'}`}>{record.schemaDisabled ? 'Disabled' : 'Enabled'}</span></td>
+                    </>
+                  )}
                   <td className="whitespace-nowrap px-4 py-2 text-[11px]">{record.updatedAt ? new Date(record.updatedAt).toLocaleDateString() : '—'}</td>
                   <td className="px-4 py-2"><div className="flex justify-end gap-1"><button aria-label={`Edit ${record.title}`} className="rounded p-1.5 text-emerald-600 transition hover:bg-emerald-50 hover:text-emerald-700" onClick={() => void openEditor(record)} title="Edit page" type="button"><FilePenLine className="h-3.5 w-3.5" /></button><button aria-label={`Delete ${record.title}`} className="rounded p-1.5 text-red-500 transition hover:bg-red-50 hover:text-red-700" onClick={() => void remove(record)} title="Delete page" type="button"><Trash2 className="h-3.5 w-3.5" /></button></div></td>
                 </tr>
@@ -310,10 +334,10 @@ export function ContentPage({
       )}
       {pendingDelete && (
         <ConfirmDeleteModal
-          title="Delete this page?"
+          title={isFaq ? 'Delete this question?' : 'Delete this page?'}
           description={
             <>
-              Do you want to delete <span className="font-semibold text-slate-700">“{pendingDelete.title}”</span>?
+              Do you want to delete <span className="font-semibold text-slate-700">“{isFaq ? (pendingDelete.h1 || pendingDelete.title) : pendingDelete.title}”</span>?
               It will be moved to trash.
             </>
           }

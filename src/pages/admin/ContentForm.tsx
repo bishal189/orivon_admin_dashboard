@@ -177,20 +177,25 @@ export function ContentForm({
     }
   }
 
+  const isFaq = form.type === 'FAQ'
   const fieldErrors = {
-    h1: !form.h1.trim() ? 'Enter a page H1.' : '',
-    slug: !form.slug.trim()
-      ? 'Enter a slug.'
-      : !SLUG_PATTERN.test(form.slug.trim())
-        ? 'Use lowercase letters, numbers, and hyphens only (e.g. ivf-treatment-dubai).'
-        : '',
-    title: !form.title.trim()
-      ? 'Enter an SEO title.'
-      : form.title.length > 70
-        ? 'SEO title must be 70 characters or fewer.'
-        : '',
-    description: !form.description.trim() ? 'Enter a meta description.' : '',
-    intro: !form.intro.trim() ? 'Enter introductory content.' : '',
+    h1: !form.h1.trim() ? (isFaq ? 'Enter the question.' : 'Enter a page H1.') : '',
+    slug: isFaq
+      ? ''
+      : !form.slug.trim()
+        ? 'Enter a slug.'
+        : !SLUG_PATTERN.test(form.slug.trim())
+          ? 'Use lowercase letters, numbers, and hyphens only (e.g. ivf-treatment-dubai).'
+          : '',
+    title: isFaq
+      ? ''
+      : !form.title.trim()
+        ? 'Enter an SEO title.'
+        : form.title.length > 70
+          ? 'SEO title must be 70 characters or fewer.'
+          : '',
+    description: isFaq ? '' : !form.description.trim() ? 'Enter a meta description.' : '',
+    intro: !form.intro.trim() ? (isFaq ? 'Enter the answer.' : 'Enter introductory content.') : '',
     authorName: form.type === 'ARTICLE' && !form.attribution.authorName.trim()
       ? 'Enter the author name.'
       : '',
@@ -220,12 +225,17 @@ export function ContentForm({
       toast.error('Fix the highlighted fields before saving.')
       return
     }
+    const payload = isFaq ? withFaqDefaults(form) : form
+    if (isFaq && !payload.slug.trim()) {
+      toast.error('Use letters or numbers in the question.')
+      return
+    }
     setSaving(true)
     setError('')
     try {
       const saved = initial
-        ? await api.updateContent(initial.id, form, initial.status)
-        : await api.createContent(form)
+        ? await api.updateContent(initial.id, payload, initial.status)
+        : await api.createContent(payload)
       toast.success(initial ? 'Content updated successfully' : 'Content created successfully')
       onSaved(saved)
     } catch (requestError) {
@@ -295,15 +305,55 @@ export function ContentForm({
               <FilePenLine className="h-5 w-5" />
             </span>
             <div>
-              <h2 className="text-base font-semibold text-slate-900" id={titleId}>{initial ? `Edit ${contentTypeLabels[form.type]}` : `Create ${contentTypeLabels[form.type]}`}</h2>
-              <p className="mt-1 text-xs text-slate-500" id={descriptionId}>Configure SEO title, description, slug, canonical, and robots in one place.</p>
+              <h2 className="text-base font-semibold text-slate-900" id={titleId}>{initial ? (isFaq ? 'Edit question' : `Edit ${contentTypeLabels[form.type]}`) : (isFaq ? 'New question' : `Create ${contentTypeLabels[form.type]}`)}</h2>
+              <p className="mt-1 text-xs text-slate-500" id={descriptionId}>{isFaq ? 'Write the question visitors open, and the answer underneath it.' : 'Configure SEO title, description, slug, canonical, and robots in one place.'}</p>
             </div>
           </div>
           <button aria-label="Close form" className="rounded-lg border border-transparent p-2 text-slate-400 transition hover:border-slate-200 hover:bg-slate-50 hover:text-slate-700 focus:outline-none focus:ring-2 focus:ring-brand-500" disabled={saving} onClick={onClose} type="button"><X className="h-4 w-4" /></button>
         </div>
         <div className="grid gap-5 p-5 sm:grid-cols-2 sm:p-6">
           {error && <div className="sm:col-span-2"><Notice message={error} /></div>}
-          {doorwaySensitive && (
+          {isFaq ? (
+            <>
+              <label className="text-xs font-medium text-slate-700 sm:col-span-2">
+                Question
+                <input
+                  aria-describedby={showError('h1') ? 'content-h1-error' : undefined}
+                  aria-invalid={showError('h1')}
+                  className={fieldInputClass(showError('h1'))}
+                  onChange={(event) => setField('h1', event.target.value)}
+                  placeholder="What visitors click to open this answer"
+                  value={form.h1}
+                />
+                {showError('h1') && <FieldError id="content-h1-error" message={fieldErrors.h1} />}
+              </label>
+              <label className="text-xs font-medium text-slate-700 sm:col-span-2">
+                Answer
+                <textarea
+                  aria-describedby={showError('intro') ? 'content-intro-error' : undefined}
+                  aria-invalid={showError('intro')}
+                  className={fieldInputClass(showError('intro'), 'min-h-32 resize-y')}
+                  onChange={(event) => setField('intro', event.target.value)}
+                  placeholder="The text that opens under the question"
+                  value={form.intro}
+                />
+                {showError('intro') && <FieldError id="content-intro-error" message={fieldErrors.intro} />}
+              </label>
+              <label className="flex items-start gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3.5 text-xs text-slate-600 sm:col-span-2">
+                <input
+                  checked={form.status === 'published'}
+                  className="mt-0.5 h-4 w-4 accent-[#1f4d42]"
+                  onChange={(event) => setField('status', event.target.checked ? 'published' : 'draft')}
+                  type="checkbox"
+                />
+                <span>
+                  <strong className="block font-semibold text-slate-800">Published</strong>
+                  Published questions can be shown on a page. Unpublished questions stay in this list only.
+                </span>
+              </label>
+            </>
+          ) : null}
+          {!isFaq && doorwaySensitive && (
             <div className="sm:col-span-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
               <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-amber-700">Unique search intent</p>
               <p className="mt-1 text-xs leading-relaxed text-amber-900/80">
@@ -324,6 +374,8 @@ export function ContentForm({
               </div>
             </div>
           )}
+          {!isFaq ? (
+          <>
           <div className="sm:col-span-2">
             <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-brand-600">Page essentials</p>
             <p className="mt-1 text-xs text-slate-400">One H1 for the page template. SEO title is independent and used in search results.</p>
@@ -1051,18 +1103,20 @@ export function ContentForm({
           </label>
           <label className={`flex items-start gap-3 rounded-xl border p-3.5 text-xs transition ${form.sitemapExcluded ? 'border-amber-200 bg-amber-50/70 text-amber-800' : 'border-emerald-100 bg-emerald-50/40 text-slate-600'}`}><input checked={form.sitemapExcluded} className="mt-0.5 h-4 w-4 accent-[#1f4d42]" onChange={(event) => setField('sitemapExcluded', event.target.checked)} type="checkbox" /><span><strong className="block font-semibold text-slate-800">Exclude from sitemap</strong>Keep this URL out of generated XML sitemaps.</span></label>
           <label className={`flex items-start gap-3 rounded-xl border p-3.5 text-xs transition ${form.schemaDisabled ? 'border-rose-200 bg-rose-50/70 text-rose-800' : 'border-blue-100 bg-blue-50/40 text-slate-600'}`}><input checked={form.schemaDisabled} className="mt-0.5 h-4 w-4 accent-[#1f4d42]" onChange={(event) => setField('schemaDisabled', event.target.checked)} type="checkbox" /><span><strong className="block font-semibold text-slate-800">Disable schema</strong>Turn off all JSON-LD structured data for this page (Organization, article, physician, breadcrumbs, etc.).</span></label>
+          </>
+          ) : null}
         </div>
         <div className="sticky bottom-0 flex flex-col-reverse gap-2 border-t border-slate-200/80 bg-slate-50/95 px-5 py-4 backdrop-blur sm:flex-row sm:items-center sm:justify-between sm:px-6">
           <p className="hidden text-[11px] text-slate-400 sm:block">Press Esc to close</p>
           <div className="flex justify-end gap-2">
-            {initial?.id ? (
+            {initial?.id && !isFaq ? (
               <button className={secondaryButton} disabled={saving || previewing} onClick={() => void openPreview()} type="button">
                 {previewing ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Eye className="h-4 w-4" />}
                 Preview
               </button>
             ) : null}
             <button className={secondaryButton} disabled={saving} onClick={onClose} type="button">Cancel</button>
-            <button className={`${primaryButton} min-w-32`} disabled={saving} type="submit">{saving && <LoaderCircle className="h-4 w-4 animate-spin" />}{initial ? 'Save changes' : 'Create record'}</button>
+            <button className={`${primaryButton} min-w-32`} disabled={saving} type="submit">{saving && <LoaderCircle className="h-4 w-4 animate-spin" />}{initial ? (isFaq ? 'Save question' : 'Save changes') : (isFaq ? 'Add question' : 'Create record')}</button>
           </div>
         </div>
       </form>
@@ -1079,6 +1133,47 @@ export function ContentForm({
       ) : null}
     </div>
   )
+}
+
+function clipText(text: string, max: number) {
+  const value = text.replace(/\s+/g, ' ').trim()
+  if (value.length <= max) return value
+  const cut = value.slice(0, max - 1)
+  const space = cut.lastIndexOf(' ')
+  return `${(space > 40 ? cut.slice(0, space) : cut).trim()}…`
+}
+
+function questionSlug(question: string) {
+  return question
+    .toLowerCase()
+    .replace(/&/g, ' and ')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 80)
+}
+
+function withFaqDefaults(form: Omit<ContentRecord, 'id'>): Omit<ContentRecord, 'id'> {
+  const question = form.h1.trim()
+  const answer = form.intro.trim()
+  return {
+    ...form,
+    h1: question,
+    intro: answer,
+    title: clipText(question, 70),
+    description: clipText(answer, 170),
+    ogTitle: clipText(question, 70),
+    ogDescription: clipText(answer, 200),
+    slug: form.slug.trim() || questionSlug(question),
+    blocks: answer ? [{ id: 'faq-answer', type: 'paragraph', text: answer }] : [],
+    canonical: '',
+    robots: 'noindex, follow',
+    sitemapExcluded: true,
+    schemaDisabled: true,
+    template: 'default',
+    image: '',
+    imageAlt: '',
+    imageIsPrimary: false,
+  }
 }
 
 function escapeHtml(value: string) {

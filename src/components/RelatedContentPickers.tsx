@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { ChevronDown, ChevronUp } from 'lucide-react'
 import {
   api,
   RELATION_KIND_META,
@@ -89,8 +90,74 @@ export function RelatedContentPickers({
     )))
   }
 
+  const questions = value.filter((relation) => relation.type === 'related-faq')
+  const questionOptions = (optionsByType.FAQ || []).filter((item) => item.id !== excludeId)
+
+  const moveQuestion = (index: number, direction: -1 | 1) => {
+    const next = index + direction
+    if (next < 0 || next >= questions.length) return
+    const reordered = [...questions]
+    const [item] = reordered.splice(index, 1)
+    reordered.splice(next, 0, item)
+    const others = value.filter((relation) => relation.type !== 'related-faq')
+    onChange([...others, ...reordered].map((relation, order) => ({ ...relation, order })))
+  }
+
   return (
     <div className="space-y-4 sm:col-span-2">
+      <div className="rounded-xl border border-slate-200 bg-white p-4">
+        <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-brand-600">Questions on this page</p>
+        <p className="mt-1 text-xs text-slate-400">These open as an accordion. Only published questions are shown on the site.</p>
+        <label className="mt-3 block text-[11px] font-semibold text-slate-700">
+          Add a question
+          <select
+            className={inputClass}
+            onChange={(event) => {
+              const record = questionOptions.find((item) => item.id === event.target.value)
+              if (record) add('related-faq', 'FAQ', record)
+              event.currentTarget.value = ''
+            }}
+            value=""
+          >
+            <option value="">{loading ? 'Loading questions…' : 'Choose a question…'}</option>
+            {questionOptions.map((item) => (
+              <option disabled={questions.some((relation) => relation.targetId === item.id)} key={item.id} value={item.id}>
+                {item.h1 || item.title}
+              </option>
+            ))}
+          </select>
+        </label>
+        {questions.length === 0 ? (
+          <p className="mt-3 text-[11px] text-slate-400">No questions on this page yet.</p>
+        ) : (
+          <ol className="mt-3 space-y-2">
+            {questions.map((relation, index) => {
+              const record = questionOptions.find((item) => item.id === relation.targetId)
+              return (
+                <li className="rounded-lg border border-slate-100 bg-slate-50 p-2.5" key={relation.targetId}>
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="text-[12px] font-semibold text-slate-800">{relation.label || record?.h1 || record?.title || relation.slug}</p>
+                      {record?.intro ? <p className="mt-1 line-clamp-2 text-[11px] leading-relaxed text-slate-500">{record.intro}</p> : null}
+                    </div>
+                    <div className="flex shrink-0 items-center gap-1">
+                      <button aria-label="Move question up" className="rounded p-1 text-slate-400 hover:bg-white hover:text-slate-700 disabled:opacity-30" disabled={index === 0} onClick={() => moveQuestion(index, -1)} type="button">
+                        <ChevronUp className="h-3.5 w-3.5" />
+                      </button>
+                      <button aria-label="Move question down" className="rounded p-1 text-slate-400 hover:bg-white hover:text-slate-700 disabled:opacity-30" disabled={index === questions.length - 1} onClick={() => moveQuestion(index, 1)} type="button">
+                        <ChevronDown className="h-3.5 w-3.5" />
+                      </button>
+                      <button className="px-1 text-[11px] text-red-500 hover:text-red-700" onClick={() => remove('related-faq', relation.targetId)} type="button">
+                        Remove
+                      </button>
+                    </div>
+                  </div>
+                </li>
+              )
+            })}
+          </ol>
+        )}
+      </div>
       <div>
         <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-brand-600">Structured internal links</p>
         <p className="mt-1 text-xs text-slate-400">
@@ -100,7 +167,7 @@ export function RelatedContentPickers({
       </div>
       {loading ? <p className="text-xs text-slate-400">Loading related content options…</p> : null}
       <div className="grid gap-3 lg:grid-cols-2">
-        {RELATION_KIND_META.map((meta) => {
+        {RELATION_KIND_META.filter((meta) => meta.kind !== 'related-faq').map((meta) => {
           const options = (optionsByType[meta.targetType] || []).filter((item) => item.id !== excludeId)
           const selected = selectedByKind.get(meta.kind) || new Set()
           const rows = value.filter((relation) => relation.type === meta.kind)
