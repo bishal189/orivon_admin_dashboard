@@ -1,5 +1,5 @@
 import {
-  Activity,
+  // Activity,
   BarChart3,
   BookOpen,
   CalendarClock,
@@ -65,7 +65,8 @@ export const navigation: NavigationSection[] = [
     items: [
       { label: 'Pages', icon: FileText, route: 'content' },
       { label: 'Services', icon: Stethoscope, route: 'services' },
-      { label: 'Conditions', icon: Activity, route: 'conditions' },
+      // Conditions are not linked on the public site.
+      // { label: 'Conditions', icon: Activity, route: 'conditions' },
       { label: 'Doctors', icon: Users, route: 'doctors' },
       { label: 'Locations', icon: MapPin, route: 'locations' },
       { label: 'Blog / Articles', icon: BookOpen, route: 'articles' },

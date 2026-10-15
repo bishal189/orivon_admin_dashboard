@@ -16,7 +16,7 @@ const routePaths: Record<string, string> = {
   'member-books': '/member-books',
   content: '/pages',
   services: '/services',
-  conditions: '/conditions',
+  // conditions: '/conditions',
   doctors: '/doctors',
   locations: '/locations',
   articles: '/articles',
@@ -105,7 +105,7 @@ function App() {
       case 'member-books': return <MemberBooksPage />
       case 'content': return <ContentPage contentType="PAGE" />
       case 'services': return <ContentPage contentType="SERVICE" />
-      case 'conditions': return <ContentPage contentType="CONDITION" />
+      // case 'conditions': return <ContentPage contentType="CONDITION" />
       case 'doctors': return <ContentPage contentType="PROVIDER" />
       case 'locations': return <ContentPage contentType="LOCATION" />
       case 'articles': return <ContentPage contentType="ARTICLE" />
