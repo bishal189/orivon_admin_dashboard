@@ -1,5 +1,6 @@
 import { Plus, Trash2 } from 'lucide-react'
 import type { ContentBlock } from '../api/client'
+import { addServicePair, isServiceStory, serviceBlockLabel } from '../pages/admin/serviceStoryBlocks'
 
 const inputClass =
   'mt-1.5 w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-brand-500 focus:ring-3 focus:ring-brand-100'
@@ -51,22 +52,37 @@ export function BodyBlocksEditor({ blocks, onChange }: BodyBlocksEditorProps) {
     }])
   }
 
+  const story = isServiceStory(blocks)
+
   return (
     <div className="space-y-3 sm:col-span-2">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-brand-600">Main body content</p>
           <p className="mt-1 text-xs text-slate-400">
-            H1 is set above. Body headings start at H2. Each image block has its own editable alt text.
+            {story
+              ? 'These fields are the service page sections. Page H1 is the heading and the intro is the sentence under it. A blank section stays off the public page.'
+              : 'H1 is set above. Body headings start at H2. Each image block has its own editable alt text.'}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <button className={secondaryButton} onClick={() => addHeading(2)} type="button"><Plus className="h-3.5 w-3.5" />H2</button>
-          <button className={secondaryButton} onClick={() => addHeading(3)} type="button"><Plus className="h-3.5 w-3.5" />H3</button>
-          <button className={secondaryButton} onClick={() => addHeading(4)} type="button"><Plus className="h-3.5 w-3.5" />H4</button>
-          <button className={secondaryButton} onClick={addParagraph} type="button"><Plus className="h-3.5 w-3.5" />Paragraph</button>
-          <button className={secondaryButton} onClick={addList} type="button"><Plus className="h-3.5 w-3.5" />List</button>
-          <button className={secondaryButton} onClick={addImage} type="button"><Plus className="h-3.5 w-3.5" />Image</button>
+          {story ? (
+            <>
+              <button className={secondaryButton} onClick={() => onChange(addServicePair(blocks, 'include'))} type="button"><Plus className="h-3.5 w-3.5" />Include</button>
+              <button className={secondaryButton} onClick={() => onChange(addServicePair(blocks, 'step'))} type="button"><Plus className="h-3.5 w-3.5" />Step</button>
+              <button className={secondaryButton} onClick={() => onChange(addServicePair(blocks, 'audience'))} type="button"><Plus className="h-3.5 w-3.5" />Audience</button>
+              <button className={secondaryButton} onClick={() => onChange(addServicePair(blocks, 'why'))} type="button"><Plus className="h-3.5 w-3.5" />Reason</button>
+            </>
+          ) : (
+            <>
+              <button className={secondaryButton} onClick={() => addHeading(2)} type="button"><Plus className="h-3.5 w-3.5" />H2</button>
+              <button className={secondaryButton} onClick={() => addHeading(3)} type="button"><Plus className="h-3.5 w-3.5" />H3</button>
+              <button className={secondaryButton} onClick={() => addHeading(4)} type="button"><Plus className="h-3.5 w-3.5" />H4</button>
+              <button className={secondaryButton} onClick={addParagraph} type="button"><Plus className="h-3.5 w-3.5" />Paragraph</button>
+              <button className={secondaryButton} onClick={addList} type="button"><Plus className="h-3.5 w-3.5" />List</button>
+              <button className={secondaryButton} onClick={addImage} type="button"><Plus className="h-3.5 w-3.5" />Image</button>
+            </>
+          )}
         </div>
       </div>
 
@@ -76,10 +92,14 @@ export function BodyBlocksEditor({ blocks, onChange }: BodyBlocksEditorProps) {
         </p>
       )}
 
-      {blocks.map((block) => (
+      {blocks.map((block) => {
+        const storyLabel = serviceBlockLabel(block.id)
+        return (
         <div className="rounded-xl border border-slate-200 bg-white p-3.5" key={block.id}>
           <div className="mb-2 flex items-center justify-between gap-2">
-            {block.type === 'heading' ? (
+            {storyLabel ? (
+              <span className="text-[11px] font-semibold text-slate-600">{storyLabel}</span>
+            ) : block.type === 'heading' ? (
               <label className="flex items-center gap-2 text-[11px] font-semibold text-slate-600">
                 Heading
                 <select
@@ -105,7 +125,7 @@ export function BodyBlocksEditor({ blocks, onChange }: BodyBlocksEditorProps) {
             <input
               className={inputClass}
               onChange={(event) => update(block.id, { text: event.target.value })}
-              placeholder="Section heading"
+              placeholder={storyLabel || 'Section heading'}
               value={block.text}
             />
           ) : block.type === 'list' ? (
@@ -192,12 +212,13 @@ export function BodyBlocksEditor({ blocks, onChange }: BodyBlocksEditorProps) {
             <textarea
               className={`${inputClass} min-h-24 resize-y`}
               onChange={(event) => update(block.id, { text: event.target.value })}
-              placeholder="Body paragraph"
+              placeholder={storyLabel || 'Body paragraph'}
               value={block.text}
             />
           )}
         </div>
-      ))}
+        )
+      })}
     </div>
   )
 }

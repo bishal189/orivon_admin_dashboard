@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import type { ContentRecord, ContentType } from '../../api/client'
+import { serviceStoryBlocks } from './serviceStoryBlocks'
 import {
   emptyAttribution,
   emptyCredentials,
@@ -35,7 +36,7 @@ export const emptyContent = (type: ContentType = 'PAGE'): Omit<ContentRecord, 'i
   locationDetails: emptyLocationDetails(),
   video: emptyVideo(),
   references: [],
-  blocks: [],
+  blocks: type === 'SERVICE' ? serviceStoryBlocks() : [],
   relations: [],
   canonical: '',
   robots: 'index, follow',
