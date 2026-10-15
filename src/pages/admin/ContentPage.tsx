@@ -89,38 +89,7 @@ export function ContentPage({
     }
   }, [contentType, page, pageSize, query, reloadKey, seoOnly, sortDirection, sortKey])
 
-  const remove = async (record: ContentRecord) => {
-    const published = record.status === 'published' && !isFaq
-    if (published) {
-      const replacement = window.prompt(
-        `“${record.title}” is published. Enter the closest relevant replacement path (not homepage unless intentional):\n\ne.g. /services/doctor-nurse-licensing`,
-        '',
-      )
-      if (replacement == null) return
-      const path = replacement.trim()
-      if (!path) {
-        toast.error('A replacement path is required to protect established URLs')
-        return
-      }
-      const allowHomepage = path === '/' && window.confirm('Really redirect this URL to the homepage? Prefer a closer replacement page.')
-      if (path === '/' && !allowHomepage) return
-      try {
-        const result = await api.retireContent(record.id, {
-          replacementPath: path,
-          allowHomepageRedirect: path === '/',
-          rewriteLinks: true,
-        })
-        toast.success(result.message)
-        if (records.length === 1 && page > 1) setPage((current) => current - 1)
-        else setReloadKey((current) => current + 1)
-      } catch (requestError) {
-        const message = requestError instanceof Error ? requestError.message : 'Unable to retire content'
-        setError(message)
-        toast.error(message)
-      }
-      return
-    }
-
+  const remove = (record: ContentRecord) => {
     setPendingDelete(record)
   }
 
