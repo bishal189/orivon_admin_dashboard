@@ -400,10 +400,9 @@ function sanitizeBlocks(blocks: ContentBlock[] = []): ContentBlock[] {
   return blocks
     .map((block): ContentBlock | null => {
       if (block.type === 'list') {
-        return {
-          ...block,
-          items: (block.items || []).map((item) => item.trim()).filter(Boolean),
-        }
+        const items = (block.items || []).map((item) => item.trim()).filter(Boolean)
+        if (!items.length) return null
+        return { ...block, items }
       }
       if (block.type === 'heading' || block.type === 'paragraph') {
         return { ...block, text: block.text.trim() }

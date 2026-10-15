@@ -24,7 +24,6 @@ import {
   linesToList,
 } from '../../api/client'
 import { BodyBlocksEditor } from '../../components/BodyBlocksEditor'
-import { RelatedContentPickers } from '../../components/RelatedContentPickers'
 import { contentTypeLabels, emptyContent, fieldInputClass, FieldError, inputClass, isHttpUrl, Notice, primaryButton, secondaryButton, SLUG_PATTERN } from './shared'
 
 export function ContentForm({
@@ -194,7 +193,16 @@ export function ContentForm({
         : form.title.length > 70
           ? 'SEO title must be 70 characters or fewer.'
           : '',
-    description: isFaq ? '' : !form.description.trim() ? 'Enter a meta description.' : '',
+    description: isFaq
+      ? ''
+      : !form.description.trim()
+        ? 'Enter a meta description.'
+        : form.description.length > 170
+          ? 'Meta description must be 170 characters or fewer.'
+          : '',
+    ogDescription: form.ogDescription.trim().length > 200
+      ? 'Social description must be 200 characters or fewer.'
+      : '',
     intro: !form.intro.trim() ? (isFaq ? 'Enter the answer.' : 'Enter introductory content.') : '',
     authorName: form.type === 'ARTICLE' && !form.attribution.authorName.trim()
       ? 'Enter the author name.'
@@ -589,7 +597,16 @@ export function ContentForm({
             </label>
             <label className="block text-xs font-medium text-slate-700">
               og:description
-              <textarea className={`${inputClass} min-h-20 resize-y`} maxLength={200} onChange={(event) => setField('ogDescription', event.target.value)} placeholder="Defaults to meta description" value={form.ogDescription} />
+              <textarea
+                aria-describedby={showError('ogDescription') ? 'content-og-description-error' : undefined}
+                aria-invalid={showError('ogDescription')}
+                className={fieldInputClass(showError('ogDescription'), 'min-h-20 resize-y')}
+                maxLength={200}
+                onChange={(event) => setField('ogDescription', event.target.value)}
+                placeholder="Defaults to meta description"
+                value={form.ogDescription}
+              />
+              {showError('ogDescription') && <FieldError id="content-og-description-error" message={fieldErrors.ogDescription} />}
             </label>
             <label className="block text-xs font-medium text-slate-700">
               og:image URL
@@ -631,20 +648,12 @@ export function ContentForm({
             onChange={(blocks) => setForm((current) => ({ ...current, blocks }))}
           />
 
-          <RelatedContentPickers
-            excludeId={initial?.id}
-            onChange={(relations) => setForm((current) => ({ ...current, relations }))}
-            sourceType={form.type}
-            value={form.relations || []}
-          />
-
           {form.type === 'PROVIDER' && (
             <div className="space-y-3 rounded-xl border border-slate-200 bg-white p-4 sm:col-span-2">
               <div>
                 <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-brand-600">Doctor profile fields</p>
                 <p className="mt-1 text-xs text-slate-400">
                   Structured specialization, qualifications, affiliations, biography, and expertise.
-                  Use the link pickers above for services offered and practice locations.
                 </p>
               </div>
               <label className="block text-xs font-medium text-slate-700">
